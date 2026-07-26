@@ -1,0 +1,70 @@
+/* ==========================================================================
+   THEMES.CSS — Design tokens for the Virtual GM Counter Laboratory
+   Aesthetic: "Cyber Laboratory Console" — dark instrument-panel base with a
+   phosphor-green primary readout colour (borrowed from oscilloscope / CRT
+   scaler displays) and an amber secondary accent (radiation caution tone).
+   ========================================================================== */
+
+:root{
+  /* ---- base surfaces ---- */
+  --bg-void:        #05070a;
+  --bg-deep:        #0a0f14;
+  --bg-panel:       #0e151b;
+  --bg-panel-alt:   #121a21;
+  --bg-raised:      #17222b;
+  --border-soft:    rgba(120,200,180,0.14);
+  --border-strong:  rgba(120,200,180,0.30);
+
+  /* ---- phosphor / signal colours ---- */
+  --phosphor:        #4dffb0;
+  --phosphor-dim:     #1f7a58;
+  --phosphor-glow:    rgba(77,255,176,0.55);
+  --amber:            #ffb020;
+  --amber-dim:        #7a5410;
+  --amber-glow:       rgba(255,176,32,0.5);
+  --danger:           #ff4d5e;
+  --danger-glow:      rgba(255,77,94,0.55);
+  --info:             #52b6ff;
+
+  /* ---- text ---- */
+  --text-primary:    #e8f4ee;
+  --text-secondary:  #93a8a0;
+  --text-muted:      #5c6f68;
+  --text-on-accent:  #04140c;
+
+  /* ---- typography ---- */
+  --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', 'Share Tech Mono', monospace;
+  --font-seg:     'Share Tech Mono', 'JetBrains Mono', monospace;
+
+  /* ---- radii / shadows ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-panel: 0 8px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.03);
+  --shadow-glow-phosphor: 0 0 18px var(--phosphor-glow);
+  --shadow-glow-amber: 0 0 18px var(--amber-glow);
+
+  /* ---- glass ---- */
+  --glass-bg: linear-gradient(160deg, rgba(20,32,30,0.62), rgba(10,16,18,0.55));
+  --glass-blur: 14px;
+}
+
+/* Alternate CRT amber theme, toggled via settings */
+body.theme-amber{
+  --phosphor: #ffb020;
+  --phosphor-dim: #7a5410;
+  --phosphor-glow: rgba(255,176,32,0.55);
+  --amber: #4dffb0;
+  --amber-glow: rgba(77,255,176,0.5);
+}
+
+/* High-contrast "NASA mission control" blue theme */
+body.theme-mission{
+  --phosphor: #52b6ff;
+  --phosphor-dim: #1c4c73;
+  --phosphor-glow: rgba(82,182,255,0.55);
+  --amber: #ffb020;
+}
+
+/* CRT scanline mode is applied as a class on <body> — see animations.css */

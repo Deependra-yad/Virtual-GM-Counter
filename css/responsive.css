@@ -1,0 +1,28 @@
+/* ==========================================================================
+   RESPONSIVE.CSS
+   ========================================================================== */
+
+@media (max-width: 1100px){
+  .main-layout{ grid-template-columns:1fr; }
+  .header-center{ display:none; }
+}
+
+@media (max-width: 720px){
+  .app-header{ flex-wrap:wrap; row-gap:8px; }
+  .header-right{ order:3; width:100%; justify-content:space-between; }
+  .header-clock{ order:2; }
+  .logo-subtitle{ display:none; }
+  .exp-tabs{ padding:8px 12px; }
+  .main-layout{ padding:12px; gap:12px; }
+  .control-buttons{ grid-template-columns:1fr; }
+  .scaler-row{ flex-direction:column; }
+  .floating-widget{ right:10px; left:10px; width:auto; top:70px; }
+  .boot-title{ font-size:16px; letter-spacing:1px; }
+  .status-strip{ display:none; }
+}
+
+@media (max-width: 480px){
+  .right-tab span, .right-tab{ font-size:10.5px; }
+  .scaler-display{ font-size:20px; }
+  .app-footer{ flex-direction:column; gap:2px; text-align:center; }
+}
