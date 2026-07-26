@@ -1,0 +1,59 @@
+/* ==========================================================================
+   ANIMATIONS.CSS
+   ========================================================================== */
+
+@keyframes spin{ from{ transform:rotate(0deg);} to{ transform:rotate(360deg);} }
+@keyframes pulseNucleus{
+  0%,100%{ box-shadow:0 0 14px var(--phosphor-glow); transform:scale(1); }
+  50%{ box-shadow:0 0 30px var(--phosphor-glow); transform:scale(1.15); }
+}
+@keyframes fadeInLine{ from{ opacity:0; transform:translateY(3px);} to{ opacity:1; transform:translateY(0);} }
+@keyframes radiationSpin{ from{ transform:rotate(0deg);} to{ transform:rotate(360deg);} }
+@keyframes typingBounce{ 0%,60%,100%{ transform:translateY(0); opacity:.5; } 30%{ transform:translateY(-4px); opacity:1; } }
+
+@keyframes flashDetector{
+  0%{ opacity:0; }
+  15%{ opacity:1; }
+  100%{ opacity:0; }
+}
+@keyframes ringExpand{
+  0%{ transform:scale(0.2); opacity:0.9; }
+  100%{ transform:scale(1.6); opacity:0; }
+}
+
+@keyframes toastIn{ from{ opacity:0; transform:translateY(10px);} to{ opacity:1; transform:translateY(0);} }
+.toast{ animation:toastIn .25s ease; }
+
+@keyframes tabPulse{
+  0%,100%{ box-shadow:0 0 10px var(--phosphor-glow); }
+  50%{ box-shadow:0 0 20px var(--phosphor-glow); }
+}
+.exp-tab.active{ animation:tabPulse 2.4s ease-in-out infinite; }
+
+/* ============ CRT MODE ============ */
+body.crt-on .app::after,
+body.crt-on .boot-screen::after{
+  content:'';
+  position:fixed; inset:0; pointer-events:none; z-index:200;
+  background:repeating-linear-gradient(to bottom, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 1px, transparent 2px, transparent 3px);
+  mix-blend-mode:multiply;
+}
+body.crt-on .app::before{
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:201;
+  box-shadow:inset 0 0 160px rgba(0,0,0,0.65);
+}
+body.crt-on{ animation:crtFlicker 6s infinite; }
+@keyframes crtFlicker{
+  0%,96%,100%{ filter:brightness(1); }
+  97%{ filter:brightness(1.03); }
+  98%{ filter:brightness(0.98); }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
+}
+
+/* fade transitions for right-panel views */
+.right-view{ animation:viewFade .2s ease; }
+@keyframes viewFade{ from{ opacity:0; transform:translateY(4px);} to{ opacity:1; transform:translateY(0);} }
