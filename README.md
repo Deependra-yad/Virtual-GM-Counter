@@ -71,46 +71,7 @@ Virtual-GM-Counter/
 
 ---
 
-## Installation & Local Development
 
-This is a static site with **zero build step**. Any static file server works.
-
-```bash
-# Option 1 — Node's "serve" package (used by npm scripts below)
-npm install
-npm run dev
-# → open http://localhost:5173
-
-# Option 2 — Python
-python3 -m http.server 5173
-
-# Option 3 — just open index.html directly in a modern browser
-```
-
-No environment variables, API keys, or backend services are required.
-
----
-
-## Deployment
-
-### Deploy to Vercel
-
-```bash
-npm i -g vercel
-vercel --prod
-```
-
-The included `vercel.json` configures the project as a static site (`@vercel/static`), so no framework detection or build command is needed. You can also just import the GitHub repository directly in the Vercel dashboard — Vercel will read `vercel.json` automatically.
-
-### Deploy to GitHub Pages
-
-1. Push this repository to GitHub.
-2. In **Settings → Pages**, set the source to the `main` branch, root folder.
-3. Your site will be published at `https://<username>.github.io/<repo>/`.
-
-Because all asset paths are relative (`css/...`, `js/...`), the app works from any sub-path without modification.
-
----
 
 ## Browser Support
 
