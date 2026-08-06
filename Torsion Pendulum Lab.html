@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Lab: Torsion Pendulum</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        lab: {
+                            bg: '#0f172a',
+                            panel: '#1e293b',
+                            primary: '#3b82f6',
+                            accent: '#10b981',
+                            text: '#f8fafc',
+                            muted: '#94a3b8'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code&display=swap" rel="stylesheet">
+
+    <!-- Three.js for 3D Rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Chart.js for Graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- MathJax for Equations -->
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+        .math-panel { font-size: 1.1em; }
+        
+        /* Custom Scrollbar for panels */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        /* Range slider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tab-btn.active {
+            border-bottom: 2px solid #3b82f6;
+            color: #3b82f6;
+        }
+
+        #canvas-container { cursor: grab; }
+        #canvas-container:active { cursor: grabbing; }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-lab-bg text-gray-900 dark:text-lab-text h-screen flex flex-col transition-colors duration-300">
+
+    <header class="glass-panel border-b border-gray-200 dark:border-gray-700 p-4 flex justify-between items-center z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg">TP</div>
+            <h1 class="text-xl font-bold tracking-tight">Torsion Pendulum Virtual Laboratory</h1>
+        </div>
+        <div class="flex gap-4 items-center">
+            <span class="text-sm text-lab-muted font-mono" id="fps-counter">60 FPS</span>
+            <button id="theme-toggle" class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                <svg class="w-5 h-5 dark:hidden" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                <svg class="w-5 h-5 hidden dark:block text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4.22 2.34a1 1 0 011.415 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM17 10a1 1 0 011 1h1a1 1 0 110 2h-1a1 1 0 01-1-1v-1zm-4.22 4.22a1 1 0 010 1.415l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.415 0zM10 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zm-4.22-2.34a1 1 0 01-1.415 0l-.707-.707a1 1 0 011.414-1.414l.707.707a1 1 0 010 1.415zM3 10a1 1 0 01-1 1H1a1 1 0 110-2h1a1 1 0 011 1zm2.34-4.22a1 1 0 010-1.415l.707-.707a1 1 0 011.414 1.414l-.707.707a1 1 0 01-1.415 0zM10 5a5 5 0 100 10 5 5 0 000-10z" clip-rule="evenodd"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- Left: 3D Visualization -->
+        <div class="w-full md:w-3/5 lg:w-2/3 relative" id="canvas-wrapper">
+            <div id="canvas-container" class="absolute inset-0"></div>
+            
+            <!-- Floating Heads Up Display (HUD) -->
+            <div class="absolute top-4 left-4 glass-panel p-3 rounded-lg pointer-events-none w-48">
+                <div class="text-xs text-lab-muted mb-1 font-semibold uppercase tracking-wider">Live Telemetry</div>
+                <div class="flex justify-between text-sm"><span class="opacity-75">Time (t)</span><span id="hud-time" class="font-mono">0.00 s</span></div>
+                <div class="flex justify-between text-sm"><span class="opacity-75">Angle (&theta;)</span><span id="hud-theta" class="font-mono">0.0&deg;</span></div>
+                <div class="flex justify-between text-sm"><span class="opacity-75">Vel (&omega;)</span><span id="hud-omega" class="font-mono">0.00 r/s</span></div>
+            </div>
+
+            <!-- Energy Bar Overlay -->
+            <div class="absolute bottom-4 left-4 glass-panel p-3 rounded-lg w-64 pointer-events-none">
+                <div class="text-xs text-lab-muted mb-2 font-semibold uppercase tracking-wider">Energy System</div>
+                <div class="space-y-2">
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span>Kinetic (Rotational)</span><span id="val-ke">0.0 J</span></div>
+                        <div class="w-full bg-gray-700 rounded-full h-1.5"><div id="bar-ke" class="bg-blue-500 h-1.5 rounded-full" style="width: 0%"></div></div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span>Potential (Elastic)</span><span id="val-pe">0.0 J</span></div>
+                        <div class="w-full bg-gray-700 rounded-full h-1.5"><div id="bar-pe" class="bg-green-500 h-1.5 rounded-full" style="width: 0%"></div></div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1"><span>Total Mech. Energy</span><span id="val-te">0.0 J</span></div>
+                        <div class="w-full bg-gray-700 rounded-full h-1.5"><div id="bar-te" class="bg-purple-500 h-1.5 rounded-full" style="width: 0%"></div></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Experiment Controls Overlay (Play/Pause) -->
+            <div class="absolute bottom-4 right-4 flex gap-2">
+                <button id="btn-twist" class="glass-panel px-4 py-2 rounded-lg hover:bg-gray-700 transition flex items-center gap-2 font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    Set Angle
+                </button>
+                <button id="btn-play" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg shadow-lg transition flex items-center gap-2 font-bold">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                    Release
+                </button>
+                <button id="btn-pause" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg shadow-lg transition items-center gap-2 font-bold hidden">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                    Pause
+                </button>
+                 <button id="btn-reset" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg shadow-lg transition flex items-center gap-2 font-bold">
+                    Reset
+                </button>
+            </div>
+        </div>
+
+        <!-- Right: Controls & Data Panel -->
+        <div class="w-full md:w-2/5 lg:w-1/3 bg-white dark:bg-lab-panel border-l border-gray-200 dark:border-gray-700 flex flex-col z-10 shrink-0 shadow-[-5px_0_15px_rgba(0,0,0,0.1)]">
+            
+            <!-- Tabs Header -->
+            <div class="flex overflow-x-auto border-b border-gray-200 dark:border-gray-700 shrink-0 px-2 pt-2">
+                <button class="tab-btn active px-4 py-2 text-sm font-medium whitespace-nowrap" data-target="tab-apparatus">Apparatus</button>
+                <button class="tab-btn px-4 py-2 text-sm font-medium whitespace-nowrap text-gray-500 hover:text-gray-300" data-target="tab-measurements">Measurements</button>
+                <button class="tab-btn px-4 py-2 text-sm font-medium whitespace-nowrap text-gray-500 hover:text-gray-300" data-target="tab-graphs">Graphs</button>
+                <button class="tab-btn px-4 py-2 text-sm font-medium whitespace-nowrap text-gray-500 hover:text-gray-300" data-target="tab-table">Observation Table</button>
+                <button class="tab-btn px-4 py-2 text-sm font-medium whitespace-nowrap text-gray-500 hover:text-gray-300" data-target="tab-theory">Theory</button>
+            </div>
+
+            <!-- Tabs Content Area -->
+            <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                
+                <!-- TAB 1: Apparatus -->
+                <div id="tab-apparatus" class="tab-content space-y-6">
+                    
+                    <!-- Wire Properties -->
+                    <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-lab-primary mb-3 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                            Suspension Wire
+                        </h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs text-lab-muted mb-1">Material (Determines Rigidity Modulus G)</label>
+                                <select id="wire-material" class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="steel">Steel (G &approx; 79.3 GPa)</option>
+                                    <option value="copper">Copper (G &approx; 44.7 GPa)</option>
+                                    <option value="brass">Brass (G &approx; 39.0 GPa)</option>
+                                    <option value="aluminium">Aluminium (G &approx; 25.5 GPa)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <label>Length (L)</label>
+                                    <span id="val-wire-len" class="font-mono">1.00 m</span>
+                                </div>
+                                <input type="range" id="wire-length" min="0.5" max="2.0" step="0.01" value="1.0">
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <label>Radius (r)</label>
+                                    <span id="val-wire-rad" class="font-mono">1.00 mm</span>
+                                </div>
+                                <input type="range" id="wire-radius" min="0.5" max="3.0" step="0.05" value="1.0">
+                            </div>
+                            <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-lab-muted">Calculated Torsional Constant (&kappa;):</span>
+                                    <span id="val-kappa" class="font-mono font-semibold text-blue-500">0.00 N·m/rad</span>
+                                </div>
+                                <div class="text-[10px] text-gray-500 mt-1 text-right">Formula: &kappa; = &pi;Gr&sup4; / 2L</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Test Object -->
+                    <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-lab-primary mb-3 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                            Test Body
+                        </h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs text-lab-muted mb-1">Select Object</label>
+                                <select id="object-type" class="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="empty">Empty Platform</option>
+                                    <option value="disc" selected>Solid Disc</option>
+                                    <option value="ring">Ring (Hollow Cylinder)</option>
+                                    <option value="cylinder">Solid Cylinder</option>
+                                    <option value="sphere">Solid Sphere</option>
+                                    <option value="plate">Rectangular Plate</option>
+                                </select>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <label>Mass (M)</label>
+                                    <span id="val-obj-mass" class="font-mono">1.00 kg</span>
+                                </div>
+                                <input type="range" id="obj-mass" min="0.1" max="5.0" step="0.1" value="1.0">
+                            </div>
+                            <div id="dim-container-1">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <label id="label-dim-1">Radius (R)</label>
+                                    <span id="val-obj-dim1" class="font-mono">0.10 m</span>
+                                </div>
+                                <input type="range" id="obj-dim1" min="0.02" max="0.2" step="0.01" value="0.10">
+                            </div>
+                            <div id="dim-container-2" class="hidden">
+                                <div class="flex justify-between text-xs mb-1">
+                                    <label id="label-dim-2">Inner Radius (r)</label>
+                                    <span id="val-obj-dim2" class="font-mono">0.08 m</span>
+                                </div>
+                                <input type="range" id="obj-dim2" min="0.01" max="0.19" step="0.01" value="0.08">
+                            </div>
+                             <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-lab-muted">Theoretical I (Object):</span>
+                                    <span id="val-theoretical-i" class="font-mono font-semibold text-accent">0.00 kg·m&sup2;</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Environment & Initial Conditions -->
+                    <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-lab-primary mb-3">Environment</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <label>Initial Twist Angle (&theta;&#8320;)</label>
+                                    <span id="val-init-angle" class="font-mono">45&deg;</span>
+                                </div>
+                                <input type="range" id="init-angle" min="-180" max="180" step="5" value="45">
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <label>Damping (Air & Internal)</label>
+                                    <span id="val-damping" class="font-mono">Low</span>
+                                </div>
+                                <input type="range" id="damping-slider" min="0" max="0.1" step="0.005" value="0.01">
+                            </div>
+                             <div>
+                                <label class="flex items-center gap-2 cursor-pointer mt-3">
+                                    <input type="checkbox" id="show-vectors" class="rounded text-blue-500 focus:ring-blue-500" checked>
+                                    <span class="text-sm">Show Physics Vectors (Torque, Vel)</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: Measurements -->
+                <div id="tab-measurements" class="tab-content hidden space-y-6">
+                    
+                    <!-- Digital Stopwatch Module -->
+                    <div class="bg-gray-900 border-2 border-gray-700 p-5 rounded-xl shadow-inner relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 opacity-50"></div>
+                        <h3 class="text-xs text-gray-400 font-mono mb-2 uppercase tracking-[0.2em] flex justify-between">
+                            <span>Digital Chronometer</span>
+                            <span class="text-green-400 opacity-70 animate-pulse">&bull; LIVE</span>
+                        </h3>
+                        <div class="text-center py-4">
+                            <div id="stopwatch-display" class="text-5xl font-mono text-red-500 tracking-wider" style="text-shadow: 0 0 10px rgba(239,68,68,0.5);">
+                                00:00.000
+                            </div>
+                        </div>
+                        <div class="flex justify-center gap-3 mt-4">
+                            <button id="sw-start" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded font-semibold transition">Start</button>
+                            <button id="sw-stop" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded font-semibold transition">Stop</button>
+                            <button id="sw-reset" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded font-semibold transition">Reset</button>
+                        </div>
+                        
+                        <div class="mt-6 border-t border-gray-700 pt-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm text-gray-300">Oscillation Counter</span>
+                                <select id="target-oscillations" class="bg-gray-800 text-white border border-gray-600 rounded px-2 py-1 text-sm outline-none">
+                                    <option value="1">1 Oscillation</option>
+                                    <option value="5">5 Oscillations</option>
+                                    <option value="10" selected>10 Oscillations</option>
+                                    <option value="20">20 Oscillations</option>
+                                </select>
+                            </div>
+                            <div class="flex justify-between items-center bg-gray-800 p-3 rounded-lg border border-gray-700">
+                                <div class="text-center">
+                                    <div class="text-xs text-gray-400 mb-1">Count (n)</div>
+                                    <div id="osc-count" class="text-xl font-mono text-yellow-400">0</div>
+                                </div>
+                                <div class="text-center border-l border-gray-700 pl-4">
+                                    <div class="text-xs text-gray-400 mb-1">Avg Period (T = t/n)</div>
+                                    <div id="osc-period" class="text-xl font-mono text-blue-400">0.000 s</div>
+                                </div>
+                            </div>
+                            <button id="btn-save-reading" class="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-medium transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                                Record Reading to Table
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Live Physics Data -->
+                    <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-lab-primary mb-3">Instantaneous Dynamics</h3>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-3">
+                            <div>
+                                <div class="text-[10px] text-lab-muted uppercase">Restoring Torque (&tau;)</div>
+                                <div id="dyn-torque" class="font-mono text-sm">0.000 N·m</div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-lab-muted uppercase">Ang. Accel (&alpha;)</div>
+                                <div id="dyn-alpha" class="font-mono text-sm">0.000 rad/s&sup2;</div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-lab-muted uppercase">Ang. Momentum (L)</div>
+                                <div id="dyn-mom" class="font-mono text-sm">0.000 kg·m&sup2;/s</div>
+                            </div>
+                             <div>
+                                <div class="text-[10px] text-lab-muted uppercase">Theoretical Freq (f)</div>
+                                <div id="dyn-freq" class="font-mono text-sm">0.000 Hz</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: Graphs -->
+                <div id="tab-graphs" class="tab-content hidden space-y-4">
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-lab-muted mb-2 text-center">Angular Displacement vs Time</h3>
+                        <div class="relative h-48 w-full">
+                            <canvas id="chart-theta"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-lab-muted mb-2 text-center">Phase Space (&omega; vs &theta;)</h3>
+                        <div class="relative h-48 w-full">
+                            <canvas id="chart-phase"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-center gap-2">
+                         <button id="btn-clear-graphs" class="text-xs bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 px-3 py-1 rounded transition">Clear Graphs</button>
+                    </div>
+                </div>
+
+                <!-- TAB 4: Observation Table -->
+                <div id="tab-table" class="tab-content hidden space-y-4">
+                    <div class="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-sm whitespace-nowrap">
+                                <thead>
+                                    <tr class="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                        <th class="p-2 border-b dark:border-gray-600 font-semibold">Obj</th>
+                                        <th class="p-2 border-b dark:border-gray-600 font-semibold">n</th>
+                                        <th class="p-2 border-b dark:border-gray-600 font-semibold">t (s)</th>
+                                        <th class="p-2 border-b dark:border-gray-600 font-semibold">T (s)</th>
+                                        <th class="p-2 border-b dark:border-gray-600 font-semibold">I<sub>exp</sub></th>
+                                        <th class="p-2 border-b dark:border-gray-600 font-semibold">I<sub>theo</sub></th>
+                                        <th class="p-2 border-b dark:border-gray-600 font-semibold">% Err</th>
+                                        <th class="p-2 border-b dark:border-gray-600 font-semibold"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="obs-table-body">
+                                    <!-- Rows added dynamically -->
+                                    <tr id="empty-table-msg">
+                                        <td colspan="8" class="p-4 text-center text-lab-muted italic">No readings recorded yet. Use the Stopwatch module to record data.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-export-csv" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm font-medium transition">Export CSV</button>
+                        <button id="btn-clear-table" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded text-sm font-medium transition">Clear Data</button>
+                    </div>
+                     <div class="text-xs text-lab-muted bg-gray-100 dark:bg-gray-800 p-3 rounded-lg mt-2">
+                        <strong>Formula used:</strong> I<sub>exp</sub> = (&kappa;T&sup2;) / 4&pi;&sup2; <br>
+                        <em>Note: The empty platform's moment of inertia is internally accounted for in this simulation for simpler direct calculation, mimicking a perfectly calibrated apparatus.</em>
+                    </div>
+                </div>
+
+                <!-- TAB 5: Theory -->
+                <div id="tab-theory" class="tab-content hidden space-y-4">
+                    <div class="bg-gray-50 dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm math-panel overflow-x-auto">
+                        <h2 class="text-lg font-bold mb-4 border-b pb-2">Governing Equations</h2>
+                        
+                        <p class="mb-2 text-sm">When the pendulum is twisted by an angle \(\theta\), the wire exerts a restoring torque \(\tau\) proportional to the angle:</p>
+                        <div class="bg-white dark:bg-gray-900 p-2 rounded mb-4 text-center">
+                            $$ \tau = -\kappa \theta $$
+                        </div>
+                        
+                        <p class="mb-2 text-sm">Where \(\kappa\) is the torsional constant of the wire:</p>
+                        <div class="bg-white dark:bg-gray-900 p-2 rounded mb-4 text-center">
+                            $$ \kappa = \frac{\pi G r^4}{2L} $$
+                        </div>
+                        <ul class="text-xs list-disc pl-5 mb-4 text-lab-muted">
+                            <li>\(G\): Modulus of Rigidity of material</li>
+                            <li>\(r\): Radius of wire</li>
+                            <li>\(L\): Length of wire</li>
+                        </ul>
+
+                        <p class="mb-2 text-sm">From Newton's Second Law for Rotation (\(\tau = I\alpha\)):</p>
+                        <div class="bg-white dark:bg-gray-900 p-2 rounded mb-4 text-center">
+                            $$ I \frac{d^2\theta}{dt^2} + \kappa \theta = 0 $$
+                        </div>
+
+                        <p class="mb-2 text-sm">This is a Simple Harmonic Motion equation. The time period \(T\) is:</p>
+                        <div class="bg-white dark:bg-gray-900 p-2 rounded mb-4 text-center">
+                            $$ T = 2\pi \sqrt{\frac{I}{\kappa}} $$
+                        </div>
+
+                        <p class="mb-2 text-sm font-semibold">Working Formula for Moment of Inertia:</p>
+                        <div class="bg-white dark:bg-gray-900 p-2 rounded text-center border-l-4 border-blue-500">
+                            $$ I = \frac{\kappa T^2}{4\pi^2} $$
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // ==========================================
+        // STATE & CONSTANTS
+        // ==========================================
+        const Constants = {
+            PI: Math.PI,
+            Materials: {
+                steel: { G: 79.3e9, color: 0x888888 },
+                copper: { G: 44.7e9, color: 0xb87333 },
+                brass: { G: 39.0e9, color: 0xc9a147 },
+                aluminium: { G: 25.5e9, color: 0xd9d9d9 }
+            },
+            Platform: { mass: 0.5, radius: 0.1, thickness: 0.01 }
+        };
+
+        const State = {
+            // Simulation
+            isRunning: false,
+            isTwisting: false, // true when user is dragging/setting angle
+            time: 0,
+            dt: 1/60,
+            
+            // Physics state vector
+            theta: 0,
+            omega: 0,
+            alpha: 0,
+            
+            // Parameters
+            wireMaterial: 'steel',
+            wireL: 1.0,
+            wireR: 0.001, // internal meters, UI in mm
+            kappa: 0,
+            
+            objType: 'disc',
+            objMass: 1.0,
+            objDim1: 0.1, // Radius/Length depending on object
+            objDim2: 0.08, // Inner Radius/Width
+            
+            I_platform: 0,
+            I_object: 0,
+            I_total: 0,
+            
+            damping: 0.01,
+            initTheta: 45 * (Math.PI/180),
+            
+            // Stopwatch/Measurements
+            swRunning: false,
+            swTime: 0,
+            swStartTime: 0,
+            crossings: 0,
+            lastTheta: 0,
+            oscCount: 0,
+            targetOsc: 10,
+            periodFound: false,
+            measuredPeriod: 0,
+            
+            // UI
+            showVectors: true,
+            theme: 'dark'
+        };
+
+        // DOM Elements
+        const UI = {
+            // Controls
+            wireMat: document.getElementById('wire-material'),
+            wireLen: document.getElementById('wire-length'),
+            wireRad: document.getElementById('wire-radius'),
+            objType: document.getElementById('object-type'),
+            objMass: document.getElementById('obj-mass'),
+            objDim1: document.getElementById('obj-dim1'),
+            objDim2: document.getElementById('obj-dim2'),
+            initAngle: document.getElementById('init-angle'),
+            damping: document.getElementById('damping-slider'),
+            showVec: document.getElementById('show-vectors'),
+            
+            // Labels
+            l_wLen: document.getElementById('val-wire-len'),
+            l_wRad: document.getElementById('val-wire-rad'),
+            l_kappa: document.getElementById('val-kappa'),
+            l_oMass: document.getElementById('val-obj-mass'),
+            l_oDim1: document.getElementById('val-obj-dim1'),
+            l_oDim2: document.getElementById('val-obj-dim2'),
+            l_theoI: document.getElementById('val-theoretical-i'),
+            l_iAng: document.getElementById('val-init-angle'),
+            
+            // Layout changes
+            c_dim1: document.getElementById('dim-container-1'),
+            c_dim2: document.getElementById('dim-container-2'),
+            text_dim1: document.getElementById('label-dim-1'),
+            text_dim2: document.getElementById('label-dim-2'),
+            
+            // Actions
+            btnTwist: document.getElementById('btn-twist'),
+            btnPlay: document.getElementById('btn-play'),
+            btnPause: document.getElementById('btn-pause'),
+            btnReset: document.getElementById('btn-reset'),
+            
+            // HUD & Dynamics
+            h_time: document.getElementById('hud-time'),
+            h_theta: document.getElementById('hud-theta'),
+            h_omega: document.getElementById('hud-omega'),
+            d_tau: document.getElementById('dyn-torque'),
+            d_alpha: document.getElementById('dyn-alpha'),
+            d_mom: document.getElementById('dyn-mom'),
+            d_freq: document.getElementById('dyn-freq'),
+            
+            // Energy
+            e_ke: document.getElementById('val-ke'),
+            e_pe: document.getElementById('val-pe'),
+            e_te: document.getElementById('val-te'),
+            b_ke: document.getElementById('bar-ke'),
+            b_pe: document.getElementById('bar-pe'),
+            b_te: document.getElementById('bar-te'),
+
+            // Stopwatch
+            swDisplay: document.getElementById('stopwatch-display'),
+            swStart: document.getElementById('sw-start'),
+            swStop: document.getElementById('sw-stop'),
+            swReset: document.getElementById('sw-reset'),
+            targetOsc: document.getElementById('target-oscillations'),
+            oscCount: document.getElementById('osc-count'),
+            oscPeriod: document.getElementById('osc-period'),
+            btnSave: document.getElementById('btn-save-reading')
+        };
+
+        // ==========================================
+        // PHYSICS ENGINE
+        // ==========================================
+        
+        function calculateParameters() {
+            // 1. Torsional Constant: kappa = (pi * G * r^4) / (2 * L)
+            const G = Constants.Materials[State.wireMaterial].G;
+            const r = State.wireR;
+            const L = State.wireL;
+            State.kappa = (Constants.PI * G * Math.pow(r, 4)) / (2 * L);
+            
+            // 2. Moments of Inertia
+            State.I_platform = 0.5 * Constants.Platform.mass * Math.pow(Constants.Platform.radius, 2);
+            
+            State.I_object = 0;
+            const M = State.objMass;
+            const R1 = State.objDim1; // Typically outer radius or length
+            const R2 = State.objDim2; // Typically inner radius or width
+            
+            switch(State.objType) {
+                case 'empty': State.I_object = 0; break;
+                case 'disc': State.I_object = 0.5 * M * R1 * R1; break;
+                case 'cylinder': State.I_object = 0.5 * M * R1 * R1; break;
+                case 'ring': State.I_object = 0.5 * M * (R1*R1 + R2*R2); break; // R1 outer, R2 inner
+                case 'sphere': State.I_object = (2/5) * M * R1 * R1; break;
+                case 'plate': State.I_object = (1/12) * M * (R1*R1 + R2*R2); break; // R1 length, R2 width
+            }
+            
+            State.I_total = State.I_platform + State.I_object;
+
+            updateUIReadouts();
+        }
+
+        // Equation of Motion: I*alpha + c*omega + kappa*theta = 0
+        // -> alpha = -(kappa*theta + c*omega) / I
+        function getDerivatives(theta, omega) {
+            // Simplified damping model relative to velocity
+            // Real physical damping would include air drag (~v^2) and internal friction.
+            // Using linear viscous damping for RK4 stability and standard harmonic behavior.
+            const c = State.damping * Math.sqrt(State.kappa * State.I_total); // Critical damping fraction
+            const alpha = -(State.kappa * theta + c * omega) / State.I_total;
+            return { dTheta: omega, dOmega: alpha };
+        }
+
+        // Runge-Kutta 4th Order Integration
+        function stepPhysics(dt) {
+            if (!State.isRunning) return;
+
+            const t = State.time;
+            const y_theta = State.theta;
+            const y_omega = State.omega;
+
+            const k1 = getDerivatives(y_theta, y_omega);
+            
+            const k2_theta = y_theta + 0.5 * dt * k1.dTheta;
+            const k2_omega = y_omega + 0.5 * dt * k1.dOmega;
+            const k2 = getDerivatives(k2_theta, k2_omega);
+            
+            const k3_theta = y_theta + 0.5 * dt * k2.dTheta;
+            const k3_omega = y_omega + 0.5 * dt * k2.dOmega;
+            const k3 = getDerivatives(k3_theta, k3_omega);
+            
+            const k4_theta = y_theta + dt * k3.dTheta;
+            const k4_omega = y_omega + dt * k3.dOmega;
+            const k4 = getDerivatives(k4_theta, k4_omega);
+
+            State.theta += (dt / 6.0) * (k1.dTheta + 2*k2.dTheta + 2*k3.dTheta + k4.dTheta);
+            State.omega += (dt / 6.0) * (k1.dOmega + 2*k2.dOmega + 2*k3.dOmega + k4.dOmega);
+            
+            // Recalculate alpha for display
+            State.alpha = getDerivatives(State.theta, State.omega).dOmega;
+            
+            State.time += dt;
+
+            handleStopwatchLogic();
+        }
+
+        function resetSimulation() {
+            State.isRunning = false;
+            State.time = 0;
+            State.theta = 0;
+            State.omega = 0;
+            State.alpha = 0;
+            
+            UI.btnPlay.style.display = 'flex';
+            UI.btnPause.style.display = 'none';
+            UI.btnTwist.disabled = false;
+            
+            resetStopwatch();
+            updateGraphics();
+            updateLiveHUD();
+            Charts.clear();
+        }
+
+        function setTwistAngle() {
+            resetSimulation();
+            State.theta = State.initTheta;
+            updateGraphics();
+            updateLiveHUD();
+        }
+
+
+        // ==========================================
+        // STOPWATCH LOGIC
+        // ==========================================
+        
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            const ms = Math.floor((seconds % 1) * 1000).toString().padStart(3, '0');
+            return `${m}:${s}.${ms}`;
+        }
+
+        function handleStopwatchLogic() {
+            if (!State.swRunning) {
+                State.lastTheta = State.theta; // keep tracking to prevent instant trigger on start
+                return;
+            }
+
+            // Real-time update display based on physical simulation time elapsed since start
+            const currentSimTime = State.time;
+            State.swTime = currentSimTime - State.swStartTime;
+            UI.swDisplay.innerText = formatTime(State.swTime);
+
+            // Zero-crossing detection for oscillation counting
+            if (State.lastTheta * State.theta < 0) {
+                State.crossings++;
+                // 1 full oscillation = 2 zero crossings (starting from equilibrium)
+                // However, since we usually start from extreme amplitude, 
+                // returning to extreme amplitude is 2 crossings of zero.
+                
+                if (State.crossings % 2 === 0) {
+                    State.oscCount++;
+                    UI.oscCount.innerText = State.oscCount;
+                    
+                    if (State.oscCount > 0) {
+                        const avgPeriod = State.swTime / State.oscCount;
+                        UI.oscPeriod.innerText = avgPeriod.toFixed(3) + " s";
+                    }
+
+                    if (State.oscCount >= State.targetOsc) {
+                        // Target reached
+                        State.swRunning = false;
+                        State.periodFound = true;
+                        State.measuredPeriod = State.swTime / State.oscCount;
+                        UI.btnSave.disabled = false;
+                        UI.swDisplay.classList.add('text-green-500');
+                        UI.swDisplay.classList.remove('text-red-500');
+                    }
+                }
+            }
+            State.lastTheta = State.theta;
+        }
+
+        function resetStopwatch() {
+            State.swRunning = false;
+            State.swTime = 0;
+            State.crossings = 0;
+            State.oscCount = 0;
+            State.periodFound = false;
+            State.measuredPeriod = 0;
+            UI.swDisplay.innerText = "00:00.000";
+            UI.oscCount.innerText = "0";
+            UI.oscPeriod.innerText = "0.000 s";
+            UI.btnSave.disabled = true;
+            UI.swDisplay.classList.add('text-red-500');
+            UI.swDisplay.classList.remove('text-green-500');
+        }
+
+        UI.swStart.onclick = () => {
+            if (State.oscCount >= State.targetOsc) resetStopwatch(); // auto reset if finished
+            State.swRunning = true;
+            State.swStartTime = State.time - State.swTime; // Handle resume
+            State.lastTheta = State.theta;
+        };
+        UI.swStop.onclick = () => { State.swRunning = false; };
+        UI.swReset.onclick = resetStopwatch;
+
+        // Table Logic
+        let trialCounter = 1;
+        UI.btnSave.onclick = () => {
+            if (!State.periodFound) return;
+            
+            const tbody = document.getElementById('obs-table-body');
+            const emptyMsg = document.getElementById('empty-table-msg');
+            if (emptyMsg) emptyMsg.remove();
+
+            const T = State.measuredPeriod;
+            // Experimental I = kappa * T^2 / (4*pi^2). 
+            // In a real lab, you'd subtract empty platform I. We do that directly here.
+            const I_exp_total = (State.kappa * T * T) / (4 * Math.PI * Math.PI);
+            const I_exp_obj = Math.max(0, I_exp_total - State.I_platform); // avoid negatives due to errors
+            
+            const I_theo = State.I_object;
+            
+            let err = 0;
+            if (I_theo > 0) {
+                err = Math.abs((I_exp_obj - I_theo) / I_theo) * 100;
+            }
+
+            let objName = UI.objType.options[UI.objType.selectedIndex].text;
+            if (State.objType === 'empty') objName = "Empty";
+
+            const tr = document.createElement('tr');
+            tr.className = "border-b dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition";
+            tr.innerHTML = `
+                <td class="p-2">${objName}</td>
+                <td class="p-2">${State.targetOsc}</td>
+                <td class="p-2">${State.swTime.toFixed(2)}</td>
+                <td class="p-2 font-mono text-blue-500">${T.toFixed(3)}</td>
+                <td class="p-2 font-mono">${I_exp_obj.toExponential(3)}</td>
+                <td class="p-2 font-mono">${I_theo.toExponential(3)}</td>
+                <td class="p-2 font-mono ${err < 2 ? 'text-green-500' : 'text-red-500'}">${I_theo > 0 ? err.toFixed(2)+'%' : '-'}</td>
+                <td class="p-2"><button class="text-red-500 hover:text-red-700" onclick="this.closest('tr').remove()">X</button></td>
+            `;
+            tbody.appendChild(tr);
+            
+            // Give feedback
+            UI.btnSave.innerText = "Saved!";
+            setTimeout(() => {
+                UI.btnSave.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg> Record Reading to Table`;
+            }, 1000);
+        };
+
+
+        // ==========================================
+        // THREE.JS VISUALIZATION
+        // ==========================================
+        
+        const canvasContainer = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        // Dynamic background matching theme
+        scene.background = new THREE.Color(document.body.classList.contains('dark') ? 0x0f172a : 0xf9fafb);
+        
+        const camera = new THREE.PerspectiveCamera(45, canvasContainer.clientWidth / canvasContainer.clientHeight, 0.1, 100);
+        camera.position.set(0, 1.5, 3.5);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        canvasContainer.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+        
+        const fillLight = new THREE.PointLight(0xbfdbfe, 0.5); // slight blue tint
+        fillLight.position.set(-5, 3, -5);
+        scene.add(fillLight);
+
+        // Grid/Floor
+        const floorGeo = new THREE.PlaneGeometry(10, 10);
+        const floorMat = new THREE.MeshStandardMaterial({ 
+            color: 0xcccccc, 
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -1;
+        floor.receiveShadow = true;
+        scene.add(floor);
+        
+        const gridHelper = new THREE.GridHelper(10, 20, 0x888888, 0x444444);
+        gridHelper.position.y = -0.99;
+        gridHelper.material.opacity = 0.2;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+
+        // Apparatus Group
+        const apparatus = new THREE.Group();
+        scene.add(apparatus);
+
+        // Base & Stand (Cast Iron Look)
+        const ironMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9, metalness: 0.3 });
+        const baseGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.05, 32);
+        const base = new THREE.Mesh(baseGeo, ironMat);
+        base.position.y = -1 + 0.025;
+        base.castShadow = true;
+        base.receiveShadow = true;
+        apparatus.add(base);
+
+        const rodGeo = new THREE.CylinderGeometry(0.02, 0.02, 2.5, 16);
+        const rod = new THREE.Mesh(rodGeo, ironMat);
+        rod.position.y = 0.25;
+        rod.position.x = -0.2; // offset
+        rod.castShadow = true;
+        apparatus.add(rod);
+
+        const armGeo = new THREE.BoxGeometry(0.5, 0.05, 0.05);
+        const arm = new THREE.Mesh(armGeo, ironMat);
+        arm.position.set(0.05, 1.4, 0);
+        arm.castShadow = true;
+        apparatus.add(arm);
+        
+        const chuckGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.08, 16);
+        const upperChuck = new THREE.Mesh(chuckGeo, ironMat);
+        upperChuck.position.set(0.2, 1.36, 0);
+        apparatus.add(upperChuck);
+
+        // Suspension Wire
+        // Using a cylinder. Needs to scale visually based on length parameter, but keep base position.
+        const wireMat = new THREE.MeshStandardMaterial({ color: Constants.Materials['steel'].color, roughness: 0.4, metalness: 0.8 });
+        // Create geometry with origin at the top so scaling length goes downwards
+        const wireGeo = new THREE.CylinderGeometry(1, 1, 1, 16);
+        wireGeo.translate(0, -0.5, 0); 
+        const wireMesh = new THREE.Mesh(wireGeo, wireMat);
+        wireMesh.position.set(0.2, 1.32, 0); // attached to chuck
+        wireMesh.castShadow = true;
+        apparatus.add(wireMesh);
+
+        // Rotating System (Platform + Object)
+        const rotatingSystem = new THREE.Group();
+        apparatus.add(rotatingSystem);
+
+        // Platform (Brass look)
+        const platformMat = new THREE.MeshStandardMaterial({ color: 0xc9a147, roughness: 0.3, metalness: 0.7 });
+        const platformGeo = new THREE.CylinderGeometry(Constants.Platform.radius, Constants.Platform.radius, Constants.Platform.thickness, 32);
+        const platform = new THREE.Mesh(platformGeo, platformMat);
+        platform.castShadow = true;
+        platform.receiveShadow = true;
+        
+        // Add a line marker to the platform to make rotation highly visible
+        const markerGeo = new THREE.BoxGeometry(Constants.Platform.radius*2, Constants.Platform.thickness + 0.002, 0.01);
+        const markerMat = new THREE.MeshBasicMaterial({color: 0x000000});
+        const marker = new THREE.Mesh(markerGeo, markerMat);
+        platform.add(marker);
+
+        rotatingSystem.add(platform);
+
+        // Object placeholder
+        let testObjectMesh = null;
+        const objectMaterial = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.5, metalness: 0.1 }); // Blueish
+
+        function createTestObject() {
+            if (testObjectMesh) {
+                rotatingSystem.remove(testObjectMesh);
+                testObjectMesh.geometry.dispose();
+                testObjectMesh = null;
+            }
+
+            if (State.objType === 'empty') return;
+
+            let geo;
+            // Map UI dimensions to visual dimensions. Visual scale is exaggerated slightly for visibility if needed, 
+            // but we'll try to stick to real proportions where possible.
+            // visual R = State.objDim1. For plate, dim1=length, dim2=width.
+            const R1 = State.objDim1;
+            const R2 = State.objDim2;
+            const H = 0.05; // fixed visual height for 2D objects
+
+            switch(State.objType) {
+                case 'disc':
+                    geo = new THREE.CylinderGeometry(R1, R1, H, 32);
+                    break;
+                case 'cylinder':
+                    geo = new THREE.CylinderGeometry(R1, R1, R1*2, 32); // height = diameter
+                    break;
+                case 'ring':
+                    // TubeGeometry isn't a flat ring. Use Extrude or Shape.
+                    // simpler: Cylinder with a hole? Or Torus for approximation visually? 
+                    // Let's use Torus for visual distinction, though theoretically it's a hollow cylinder.
+                    // Better: Shape geometry
+                    const shape = new THREE.Shape();
+                    shape.absarc(0, 0, R1, 0, Math.PI * 2, false);
+                    const holePath = new THREE.Path();
+                    holePath.absarc(0, 0, R2, 0, Math.PI * 2, true);
+                    shape.holes.push(holePath);
+                    const extrudeSettings = { depth: H, bevelEnabled: false, curveSegments: 32 };
+                    geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+                    geo.rotateX(Math.PI / 2);
+                    geo.translate(0, H/2, 0); // fix origin
+                    break;
+                case 'sphere':
+                    geo = new THREE.SphereGeometry(R1, 32, 32);
+                    break;
+                case 'plate':
+                    geo = new THREE.BoxGeometry(R1, H, R2);
+                    break;
+            }
+
+            if (geo) {
+                testObjectMesh = new THREE.Mesh(geo, objectMaterial);
+                
+                // Position properly on platform
+                let yOffset = H/2 + Constants.Platform.thickness/2;
+                if (State.objType === 'cylinder') yOffset = R1 + Constants.Platform.thickness/2;
+                if (State.objType === 'sphere') yOffset = R1 + Constants.Platform.thickness/2;
+                if (State.objType === 'ring') yOffset = Constants.Platform.thickness/2; // Extrude geo specific fixing
+                
+                testObjectMesh.position.y = yOffset;
+                testObjectMesh.castShadow = true;
+                testObjectMesh.receiveShadow = true;
+                rotatingSystem.add(testObjectMesh);
+            }
+        }
+
+        // Vectors (Torque, Velocity)
+        const vecOrigin = new THREE.Vector3(0.2, 0.5, 0); // center of platform roughly
+        const torqueArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), vecOrigin, 0, 0xff0000, 0.1, 0.05);
+        const velArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), vecOrigin, 0, 0x00ff00, 0.1, 0.05);
+        scene.add(torqueArrow);
+        scene.add(velArrow);
+
+        // Interaction (Camera Control manually)
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        
+        canvasContainer.addEventListener('mousedown', (e) => { isDragging = true; });
+        canvasContainer.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaMove = { x: e.offsetX - previousMousePosition.x, y: e.offsetY - previousMousePosition.y };
+                apparatus.rotation.y += deltaMove.x * 0.01;
+                // limit x rotation
+                camera.position.y += deltaMove.y * 0.01;
+                camera.lookAt(apparatus.position);
+            }
+            previousMousePosition = { x: e.offsetX, y: e.offsetY };
+        });
+        window.addEventListener('mouseup', () => { isDragging = false; });
+        canvasContainer.addEventListener('mouseleave', () => { isDragging = false; });
+        
+        // Touch support
+        canvasContainer.addEventListener('touchstart', (e) => {
+             isDragging = true;
+             previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }, {passive:true});
+        canvasContainer.addEventListener('touchmove', (e) => {
+             if (isDragging) {
+                const deltaMove = { x: e.touches[0].clientX - previousMousePosition.x, y: e.touches[0].clientY - previousMousePosition.y };
+                apparatus.rotation.y += deltaMove.x * 0.01;
+             }
+             previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }, {passive:true});
+        window.addEventListener('touchend', () => { isDragging = false; });
+
+        camera.lookAt(0, 0.5, 0);
+
+
+        // ==========================================
+        // CHART.JS SETUP
+        // ==========================================
+        
+        Chart.defaults.color = document.body.classList.contains('dark') ? '#94a3b8' : '#64748b';
+        Chart.defaults.font.family = 'Inter';
+
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                animation: false, // critical for real-time performance
+                elements: { point: { radius: 0 }, line: { borderWidth: 2, tension: 0.1 } },
+                scales: {
+                    x: { type: 'linear', display: false },
+                    y: { grid: { color: 'rgba(150, 150, 150, 0.1)' } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        };
+
+        const ctxTheta = document.getElementById('chart-theta').getContext('2d');
+        const chartTheta = new Chart(ctxTheta, {
+            ...chartConfig,
+            data: { datasets: [{ data: [], borderColor: '#3b82f6' }] },
+            options: { ...chartConfig.options, scales: { ...chartConfig.options.scales, y: { suggestedMin: -2, suggestedMax: 2 } } }
+        });
+
+        const ctxPhase = document.getElementById('chart-phase').getContext('2d');
+        const chartPhase = new Chart(ctxPhase, {
+            type: 'line',
+            data: { datasets: [{ data: [], borderColor: '#10b981', showLine: true }] },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                elements: { point: { radius: 1 } },
+                scales: {
+                    x: { title: { display: true, text: 'Angle θ (rad)' } },
+                    y: { title: { display: true, text: 'Velocity ω (rad/s)' } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        const Charts = {
+            maxPoints: 300,
+            update: function() {
+                if (!State.isRunning) return;
+                
+                // Theta vs Time
+                const dTheta = chartTheta.data.datasets[0].data;
+                dTheta.push({x: State.time, y: State.theta});
+                if (dTheta.length > this.maxPoints) dTheta.shift();
+                chartTheta.update();
+
+                // Phase Space
+                const dPhase = chartPhase.data.datasets[0].data;
+                dPhase.push({x: State.theta, y: State.omega});
+                if (dPhase.length > this.maxPoints) dPhase.shift();
+                chartPhase.update();
+            },
+            clear: function() {
+                chartTheta.data.datasets[0].data = [];
+                chartPhase.data.datasets[0].data = [];
+                chartTheta.update();
+                chartPhase.update();
+            }
+        };
+
+        document.getElementById('btn-clear-graphs').onclick = Charts.clear;
+
+        // ==========================================
+        // UI UPDATES & EVENT LISTENERS
+        // ==========================================
+
+        function updateUIReadouts() {
+            // Update labels
+            UI.l_wLen.innerText = State.wireL.toFixed(2) + " m";
+            UI.l_wRad.innerText = (State.wireR * 1000).toFixed(2) + " mm";
+            UI.l_kappa.innerText = State.kappa.toExponential(3) + " N·m/rad";
+            UI.l_oMass.innerText = State.objMass.toFixed(2) + " kg";
+            UI.l_oDim1.innerText = State.objDim1.toFixed(2) + " m";
+            UI.l_oDim2.innerText = State.objDim2.toFixed(2) + " m";
+            UI.l_theoI.innerText = State.I_object.toExponential(3) + " kg·m²";
+            
+            let deg = (State.initTheta * 180 / Math.PI).toFixed(0);
+            UI.l_iAng.innerText = deg + "°";
+            
+            // Damping text
+            let dText = "Low";
+            if(State.damping > 0.03) dText = "Medium";
+            if(State.damping > 0.07) dText = "High";
+            if(State.damping == 0) dText = "None";
+            document.getElementById('val-damping').innerText = dText;
+
+            // Theoretical frequency
+            const freq = (1 / (2 * Math.PI)) * Math.sqrt(State.kappa / State.I_total);
+            UI.d_freq.innerText = freq.toFixed(3) + " Hz";
+        }
+
+        function updateGraphics() {
+            // Update Wire Visuals
+            // Base pos is y=1.32. Length grows downward.
+            // Initial length was 1 unit.
+            wireMesh.scale.y = State.wireL;
+            wireMesh.scale.x = (State.wireR * 1000) * 0.5; // Exaggerate radius slightly for visibility
+            wireMesh.scale.z = (State.wireR * 1000) * 0.5;
+            wireMesh.material.color.setHex(Constants.Materials[State.wireMaterial].color);
+
+            // Update Rotating System Position (depends on wire length)
+            // wire starts at 1.32 and goes down by wireL. 
+            // Chuck is at 1.36. 
+            // Let's attach platform to bottom of wire.
+            rotatingSystem.position.y = 1.32 - State.wireL;
+            // Also need to offset x because the whole apparatus arm is offset
+            rotatingSystem.position.x = 0.2;
+
+            // Apply Rotation
+            rotatingSystem.rotation.y = State.theta;
+
+            // Vectors
+            if (State.showVectors) {
+                torqueArrow.visible = true;
+                velArrow.visible = true;
+                
+                const torque = -State.kappa * State.theta; // simplified purely elastic torque for vector
+                
+                // Position arrows above platform
+                torqueArrow.position.copy(rotatingSystem.position);
+                torqueArrow.position.y += 0.2;
+                velArrow.position.copy(rotatingSystem.position);
+                velArrow.position.y += 0.4;
+                
+                // Scale based on magnitude, direction based on sign
+                if (Math.abs(torque) > 0.001) {
+                    torqueArrow.setDirection(new THREE.Vector3(0, Math.sign(torque), 0));
+                    torqueArrow.setLength(Math.max(0.1, Math.min(1.0, Math.abs(torque) * 10)));
+                } else torqueArrow.setLength(0.001);
+
+                if (Math.abs(State.omega) > 0.01) {
+                    velArrow.setDirection(new THREE.Vector3(0, Math.sign(State.omega), 0));
+                    velArrow.setLength(Math.max(0.1, Math.min(1.0, Math.abs(State.omega) * 0.1)));
+                } else velArrow.setLength(0.001);
+            } else {
+                torqueArrow.visible = false;
+                velArrow.visible = false;
+            }
+        }
+
+        function updateLiveHUD() {
+            // Telemetry
+            UI.h_time.innerText = State.time.toFixed(2) + " s";
+            UI.h_theta.innerText = (State.theta * 180 / Math.PI).toFixed(1) + "°";
+            UI.h_omega.innerText = State.omega.toFixed(2) + " r/s";
+
+            // Dynamics
+            const tau = -State.kappa * State.theta - (State.damping * Math.sqrt(State.kappa * State.I_total)) * State.omega;
+            const L = State.I_total * State.omega;
+            
+            UI.d_tau.innerText = tau.toFixed(3) + " N·m";
+            UI.d_alpha.innerText = State.alpha.toFixed(3) + " rad/s²";
+            UI.d_mom.innerText = L.toFixed(3) + " kg·m²/s";
+
+            // Energy
+            const ke = 0.5 * State.I_total * State.omega * State.omega;
+            const pe = 0.5 * State.kappa * State.theta * State.theta;
+            const te = ke + pe;
+
+            UI.e_ke.innerText = ke.toFixed(3) + " J";
+            UI.e_pe.innerText = pe.toFixed(3) + " J";
+            UI.e_te.innerText = te.toFixed(3) + " J";
+
+            // Calculate max energy based on initial conditions for bar scaling
+            const maxPe = 0.5 * State.kappa * State.initTheta * State.initTheta;
+            const eScale = maxPe > 0 ? maxPe : 1;
+
+            UI.b_ke.style.width = Math.min(100, (ke / eScale) * 100) + "%";
+            UI.b_pe.style.width = Math.min(100, (pe / eScale) * 100) + "%";
+            UI.b_te.style.width = Math.min(100, (te / eScale) * 100) + "%";
+        }
+
+        // Input Bindings
+        function bindInputs() {
+            UI.wireMat.addEventListener('change', (e) => { State.wireMaterial = e.target.value; calculateParameters(); });
+            UI.wireLen.addEventListener('input', (e) => { State.wireL = parseFloat(e.target.value); calculateParameters(); updateGraphics(); });
+            UI.wireRad.addEventListener('input', (e) => { State.wireR = parseFloat(e.target.value) / 1000; calculateParameters(); updateGraphics(); });
+            
+            UI.objType.addEventListener('change', (e) => {
+                State.objType = e.target.value;
+                
+                // Adjust UI based on object
+                UI.c_dim1.classList.remove('hidden');
+                UI.c_dim2.classList.add('hidden');
+                
+                switch(State.objType) {
+                    case 'empty':
+                        UI.c_dim1.classList.add('hidden');
+                        break;
+                    case 'ring':
+                        UI.c_dim2.classList.remove('hidden');
+                        UI.text_dim1.innerText = "Outer Radius (R)";
+                        UI.text_dim2.innerText = "Inner Radius (r)";
+                        break;
+                    case 'plate':
+                        UI.c_dim2.classList.remove('hidden');
+                        UI.text_dim1.innerText = "Length (a)";
+                        UI.text_dim2.innerText = "Width (b)";
+                        break;
+                    default:
+                        UI.text_dim1.innerText = "Radius (R)";
+                }
+                
+                createTestObject();
+                calculateParameters();
+                updateGraphics();
+            });
+            
+            UI.objMass.addEventListener('input', (e) => { State.objMass = parseFloat(e.target.value); calculateParameters(); });
+            UI.objDim1.addEventListener('input', (e) => { State.objDim1 = parseFloat(e.target.value); calculateParameters(); createTestObject(); updateGraphics();});
+            UI.objDim2.addEventListener('input', (e) => { State.objDim2 = parseFloat(e.target.value); calculateParameters(); createTestObject(); updateGraphics();});
+            
+            UI.initAngle.addEventListener('input', (e) => { 
+                State.initTheta = parseFloat(e.target.value) * (Math.PI/180); 
+                updateUIReadouts();
+                if(!State.isRunning) setTwistAngle();
+            });
+            
+            UI.damping.addEventListener('input', (e) => { State.damping = parseFloat(e.target.value); updateUIReadouts(); });
+            UI.showVec.addEventListener('change', (e) => { State.showVectors = e.target.checked; updateGraphics(); });
+
+            // Buttons
+            UI.btnTwist.addEventListener('click', setTwistAngle);
+            UI.btnPlay.addEventListener('click', () => {
+                State.isRunning = true;
+                UI.btnPlay.style.display = 'none';
+                UI.btnPause.style.display = 'flex';
+                UI.btnTwist.disabled = true;
+            });
+            UI.btnPause.addEventListener('click', () => {
+                State.isRunning = false;
+                UI.btnPlay.style.display = 'flex';
+                UI.btnPause.style.display = 'none';
+            });
+            UI.btnReset.addEventListener('click', resetSimulation);
+            
+            UI.targetOsc.addEventListener('change', (e) => { State.targetOsc = parseInt(e.target.value); });
+
+            // Export CSV
+            document.getElementById('btn-export-csv').addEventListener('click', () => {
+                const rows = document.querySelectorAll('#obs-table-body tr');
+                if (rows.length === 0 || rows[0].id === 'empty-table-msg') return;
+                
+                let csv = "Object,Oscillations,TotalTime_s,Period_s,I_exp,I_theo,Error_%\n";
+                rows.forEach(row => {
+                    const cols = row.querySelectorAll('td');
+                    if(cols.length > 1) {
+                        let rowData = [];
+                        for(let i=0; i<7; i++) rowData.push(cols[i].innerText.replace('+', ''));
+                        csv += rowData.join(',') + "\n";
+                    }
+                });
+                
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.setAttribute('hidden', '');
+                a.setAttribute('href', url);
+                a.setAttribute('download', 'torsion_pendulum_data.csv');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            });
+
+            document.getElementById('btn-clear-table').addEventListener('click', () => {
+                document.getElementById('obs-table-body').innerHTML = `<tr id="empty-table-msg"><td colspan="8" class="p-4 text-center text-lab-muted italic">No readings recorded yet. Use the Stopwatch module to record data.</td></tr>`;
+            });
+        }
+
+
+        // ==========================================
+        // MAIN LOOP & INITIALIZATION
+        // ==========================================
+        
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let lastFpsTime = lastTime;
+
+        function animate(currentTime) {
+            requestAnimationFrame(animate);
+
+            // FPS calculation
+            frameCount++;
+            if (currentTime - lastFpsTime >= 1000) {
+                document.getElementById('fps-counter').innerText = frameCount + " FPS";
+                frameCount = 0;
+                lastFpsTime = currentTime;
+            }
+
+            // Fixed time step for physics stability, independent of frame rate
+            const rawDt = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+            // Cap dt to prevent explosion on tab switch
+            const dt = Math.min(rawDt, 0.05);
+
+            if (State.isRunning) {
+                // Multi-step physics for higher precision if needed, but simple harmonic is usually fine with small dt
+                stepPhysics(dt);
+                Charts.update();
+            }
+
+            // Always update visuals
+            updateGraphics();
+            if (State.isRunning) updateLiveHUD();
+
+            renderer.render(scene, camera);
+        }
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            const width = canvasContainer.clientWidth;
+            const height = canvasContainer.clientHeight;
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        });
+
+        // Tabs Logic
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Remove active from all
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active', 'border-b-2', 'border-blue-500', 'text-blue-500'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                
+                // Add active to clicked
+                btn.classList.add('active');
+                // The tailwind classes for active state
+                btn.classList.remove('text-gray-500');
+                
+                // Show content
+                const target = document.getElementById(btn.dataset.target);
+                if (target) target.classList.remove('hidden');
+            });
+        });
+
+        // Theme Toggle
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            State.theme = isDark ? 'dark' : 'light';
+            
+            // Update ThreeJS background
+            scene.background = new THREE.Color(isDark ? 0x0f172a : 0xf9fafb);
+            
+            // Update ChartJS colors
+            Chart.defaults.color = isDark ? '#94a3b8' : '#64748b';
+            chartTheta.options.scales.y.grid.color = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+            chartPhase.options.scales.x.grid.color = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+            chartPhase.options.scales.y.grid.color = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+            chartTheta.update();
+            chartPhase.update();
+        });
+
+        // Initialize
+        function init() {
+            bindInputs();
+            calculateParameters();
+            createTestObject();
+            setTwistAngle(); // Sets initial position visually
+            requestAnimationFrame(animate);
+        }
+
+        // Wait for MathJax to process before showing theory cleanly if needed, though it handles itself mostly.
+        window.onload = init;
+
+    </script>
+</body>
+</html>

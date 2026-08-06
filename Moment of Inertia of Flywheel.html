@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Flywheel Moment of Inertia Lab</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Roboto Mono', 'monospace'],
+                        digital: ['Orbitron', 'sans-serif'],
+                    },
+                    colors: {
+                        lab: {
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            700: '#334155',
+                            600: '#475569',
+                            400: '#94a3b8',
+                            200: '#e2e8f0',
+                            100: '#f1f5f9',
+                            50: '#f8fafc',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@500;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --glass-bg: rgba(30, 41, 59, 0.85);
+            --glass-border: rgba(71, 85, 105, 0.5);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        html.light {
+            --glass-bg: rgba(255, 255, 255, 0.9);
+            --glass-border: rgba(203, 213, 225, 0.8);
+            --text-main: #0f172a;
+            --text-muted: #475569;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: var(--glass-bg);
+            color: var(--text-main);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .digital-readout {
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 0.05em;
+            text-shadow: 0 0 8px currentColor;
+        }
+
+        #canvas-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100vh; z-index: 0;
+        }
+
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100vh;
+            pointer-events: none; z-index: 10; display: flex; flex-direction: column;
+        }
+
+        .interactive { pointer-events: auto; }
+
+        /* Range Sliders */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%;
+            background: #38bdf8; cursor: pointer; margin-top: -5px;
+            box-shadow: 0 0 5px rgba(56, 189, 248, 0.6);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer; background: #475569; border-radius: 2px;
+        }
+        html.light input[type=range]::-webkit-slider-runnable-track { background: #cbd5e1; }
+
+        /* Print Styles for Lab Report */
+        @media print {
+            body * { visibility: hidden; }
+            #lab-report, #lab-report * { visibility: visible; }
+            #lab-report {
+                position: absolute; left: 0; top: 0; width: 100%; height: auto;
+                background: white; color: black; z-index: 9999; padding: 20mm; overflow: visible;
+            }
+            .no-print { display: none !important; }
+            .print-break { page-break-before: always; }
+        }
+
+        .tab-btn.active {
+            border-bottom: 2px solid #38bdf8; color: #38bdf8;
+        }
+    </style>
+</head>
+<body class="antialiased h-screen w-screen text-sm transition-colors duration-300">
+
+    <!-- 3D Environment -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer" class="p-2 md:p-4">
+        
+        <!-- Header -->
+        <header class="interactive glass-panel rounded-xl p-3 flex justify-between items-center mb-4">
+            <div>
+                <h1 class="text-lg md:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-blue-600">
+                    Flywheel Dynamics Lab
+                </h1>
+                <p class="text-[10px] md:text-xs text-muted font-mono">Precision Rotational Inertia Simulator v2.0</p>
+            </div>
+            <div class="flex gap-2">
+                <button id="btn-theme" class="p-2 rounded bg-lab-800 hover:bg-lab-700 text-lab-200 border border-lab-700 transition" title="Toggle Theme">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                </button>
+                <button id="btn-report" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition flex items-center gap-1 shadow-lg shadow-indigo-500/30">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Generate Report
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <div class="flex flex-col md:flex-row gap-4 h-[calc(100vh-100px)]">
+            
+            <!-- LEFT PANEL: Controls & Setup -->
+            <div class="interactive w-full md:w-[320px] flex flex-col gap-4 h-full overflow-y-auto scrollbar-hide shrink-0 pb-10">
+                
+                <!-- Experiment Controls -->
+                <div class="glass-panel rounded-xl p-4 flex flex-col gap-3 border-t-4 border-t-sky-500">
+                    <div class="flex justify-between items-center mb-1">
+                        <h2 class="font-semibold text-sm">Control Unit</h2>
+                        <span id="status-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-700 text-slate-300">IDLE</span>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="btn-wind" class="bg-slate-700 hover:bg-slate-600 text-white py-2 rounded text-xs font-semibold transition flex flex-col items-center gap-1">
+                            <span>Wind String</span>
+                        </button>
+                        <button id="btn-release" disabled class="bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed">
+                            Release Mass
+                        </button>
+                        <button id="btn-pause" disabled class="bg-amber-600 hover:bg-amber-500 text-white py-1.5 rounded text-xs font-semibold transition disabled:opacity-40">
+                            Pause / Play
+                        </button>
+                        <button id="btn-reset" class="bg-rose-600 hover:bg-rose-500 text-white py-1.5 rounded text-xs font-semibold transition">
+                            Reset App
+                        </button>
+                    </div>
+
+                    <div class="flex justify-between items-center mt-2 pt-2 border-t border-lab-700 text-xs">
+                        <span class="text-muted">Sim Speed:</span>
+                        <select id="ctrl-speed" class="bg-lab-800 border border-lab-600 rounded p-1 text-text-main outline-none">
+                            <option value="0.25">0.25x (Slow)</option>
+                            <option value="0.5">0.5x</option>
+                            <option value="1" selected>1.0x (Realtime)</option>
+                            <option value="2">2.0x</option>
+                            <option value="5">5.0x</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Digital Instruments -->
+                <div class="glass-panel rounded-xl p-4 flex flex-col gap-3">
+                    <h2 class="font-semibold text-sm mb-1">Digital Instruments</h2>
+                    
+                    <div class="bg-lab-900 border border-lab-700 rounded-lg p-3 grid grid-cols-2 gap-y-3 gap-x-4 relative overflow-hidden">
+                        <!-- Screen glare effect -->
+                        <div class="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/5 to-transparent pointer-events-none"></div>
+                        
+                        <div>
+                            <div class="text-[9px] text-muted uppercase tracking-wider mb-1">Stopwatch (s)</div>
+                            <div id="inst-time" class="digital-readout text-2xl text-sky-400">0.000</div>
+                        </div>
+                        <div>
+                            <div class="text-[9px] text-muted uppercase tracking-wider mb-1">Tachometer (rad/s)</div>
+                            <div id="inst-omega" class="digital-readout text-2xl text-emerald-400">0.00</div>
+                        </div>
+                        <div class="col-span-2">
+                            <div class="text-[9px] text-muted uppercase tracking-wider mb-1 flex justify-between">
+                                <span>Revolutions (N)</span>
+                                <span>N₁: <span id="inst-n1">0.00</span> | N₂: <span id="inst-n2">0.00</span></span>
+                            </div>
+                            <div id="inst-revs" class="digital-readout text-3xl text-amber-400">0.000</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parameters Setup -->
+                <div class="glass-panel rounded-xl p-4 flex flex-col gap-3 flex-grow">
+                    <h2 class="font-semibold text-sm mb-1">Apparatus Setup</h2>
+                    
+                    <div class="space-y-4">
+                        <!-- Mode & Material -->
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="flex flex-col gap-1">
+                                <label class="text-muted">Mode</label>
+                                <select id="param-mode" class="bg-lab-800 border border-lab-600 rounded p-1 outline-none text-text-main">
+                                    <option value="ideal">Ideal (Theory)</option>
+                                    <option value="exp" selected>Experimental (Noise)</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-muted">Material</label>
+                                <select id="param-mat" class="bg-lab-800 border border-lab-600 rounded p-1 outline-none text-text-main">
+                                    <option value="7850">Steel</option>
+                                    <option value="7200" selected>Cast Iron</option>
+                                    <option value="8500">Brass</option>
+                                    <option value="2700">Aluminium</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Sliders -->
+                        <div class="flex flex-col gap-1">
+                            <div class="flex justify-between text-xs"><span class="text-muted">Flywheel Radius (m)</span><span id="val-R" class="font-mono">0.200</span></div>
+                            <input type="range" id="param-R" min="0.05" max="0.5" step="0.005" value="0.2">
+                        </div>
+                        
+                        <div class="flex flex-col gap-1">
+                            <div class="flex justify-between text-xs"><span class="text-muted">Axle Radius (m)</span><span id="val-r" class="font-mono">0.020</span></div>
+                            <input type="range" id="param-r" min="0.005" max="0.05" step="0.001" value="0.02">
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <div class="flex justify-between text-xs"><span class="text-muted">Hanging Mass (kg)</span><span id="val-m" class="font-mono">2.00</span></div>
+                            <input type="range" id="param-m" min="0.05" max="5.0" step="0.05" value="2.0">
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <div class="flex justify-between text-xs"><span class="text-muted">Bearing Wear / Friction</span><span id="val-fric" class="font-mono">Normal</span></div>
+                            <input type="range" id="param-fric" min="0" max="3" step="0.1" value="1.0">
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label class="text-muted text-xs">Gravity Environment</label>
+                            <select id="param-g" class="bg-lab-800 border border-lab-600 rounded p-1 text-xs outline-none text-text-main">
+                                <option value="9.81" selected>Earth (9.81 m/s²)</option>
+                                <option value="1.62">Moon (1.62 m/s²)</option>
+                                <option value="3.71">Mars (3.71 m/s²)</option>
+                                <option value="24.79">Jupiter (24.79 m/s²)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL: Data, Graphs, Equations -->
+            <div class="interactive w-full md:w-[450px] ml-auto flex flex-col h-full glass-panel rounded-xl overflow-hidden shrink-0">
+                
+                <!-- Tabs Header -->
+                <div class="flex border-b border-lab-700 bg-lab-800/50">
+                    <button class="tab-btn active flex-1 py-2 text-xs font-semibold transition" data-tab="live">Live Data</button>
+                    <button class="tab-btn flex-1 py-2 text-xs font-semibold transition text-muted hover:text-text-main" data-tab="graphs">Graphs</button>
+                    <button class="tab-btn flex-1 py-2 text-xs font-semibold transition text-muted hover:text-text-main" data-tab="math">Theory & Table</button>
+                </div>
+
+                <!-- Tab Contents -->
+                <div class="relative flex-grow overflow-y-auto overflow-x-hidden p-4 scrollbar-hide">
+                    
+                    <!-- LIVE DATA TAB -->
+                    <div id="tab-live" class="space-y-5 block">
+                        
+                        <!-- Physics Engine Readouts -->
+                        <div>
+                            <h3 class="text-xs font-bold text-muted mb-2 uppercase">Dynamics Engine</h3>
+                            <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-mono bg-lab-900/50 p-3 rounded-lg border border-lab-700/50">
+                                <div class="flex justify-between"><span class="text-muted">Flywheel Mass:</span> <span id="dyn-M">0.00 kg</span></div>
+                                <div class="flex justify-between"><span class="text-muted">Theory \(I\):</span> <span id="dyn-I" class="text-sky-400">0.00 kg·m²</span></div>
+                                <div class="flex justify-between"><span class="text-muted">\(\alpha\) (Accel):</span> <span id="dyn-alpha">0.00 rad/s²</span></div>
+                                <div class="flex justify-between"><span class="text-muted">\(\tau_{net}\) (Torque):</span> <span id="dyn-tau">0.00 N·m</span></div>
+                                <div class="flex justify-between"><span class="text-muted">Tension (T):</span> <span id="dyn-tension">0.00 N</span></div>
+                                <div class="flex justify-between"><span class="text-muted">\(\tau_{fric}\) (Loss):</span> <span id="dyn-tauf" class="text-rose-400">0.00 N·m</span></div>
+                                <div class="flex justify-between"><span class="text-muted">Linear Vel:</span> <span id="dyn-v">0.00 m/s</span></div>
+                                <div class="flex justify-between"><span class="text-muted">Linear Acc:</span> <span id="dyn-a">0.00 m/s²</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Energy Visualizations -->
+                        <div>
+                            <h3 class="text-xs font-bold text-muted mb-2 uppercase flex justify-between">
+                                <span>Energy Conversion</span>
+                                <span id="dyn-mechE" class="text-text-main">0.0 J</span>
+                            </h3>
+                            <div class="space-y-3 bg-lab-900/50 p-3 rounded-lg border border-lab-700/50">
+                                <div>
+                                    <div class="flex justify-between text-[10px] text-muted mb-1">
+                                        <span>Potential Energy (mgh)</span> <span id="val-pe" class="font-mono">0.0 J</span>
+                                    </div>
+                                    <div class="w-full h-2 bg-lab-700 rounded-full overflow-hidden">
+                                        <div id="bar-pe" class="h-full bg-blue-500 transition-all duration-75 ease-linear w-full"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[10px] text-muted mb-1">
+                                        <span>Rotational KE (½Iω²)</span> <span id="val-ke-rot" class="font-mono">0.0 J</span>
+                                    </div>
+                                    <div class="w-full h-2 bg-lab-700 rounded-full overflow-hidden">
+                                        <div id="bar-ke-rot" class="h-full bg-emerald-500 transition-all duration-75 ease-linear w-0"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[10px] text-muted mb-1">
+                                        <span>Translational KE (½mv²)</span> <span id="val-ke-trans" class="font-mono">0.0 J</span>
+                                    </div>
+                                    <div class="w-full h-2 bg-lab-700 rounded-full overflow-hidden">
+                                        <div id="bar-ke-trans" class="h-full bg-amber-400 transition-all duration-75 ease-linear w-0"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[10px] text-muted mb-1">
+                                        <span>Energy Lost (Friction)</span> <span id="val-loss" class="font-mono">0.0 J</span>
+                                    </div>
+                                    <div class="w-full h-2 bg-lab-700 rounded-full overflow-hidden">
+                                        <div id="bar-loss" class="h-full bg-rose-500 transition-all duration-75 ease-linear w-0"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Visual Toggles -->
+                        <div class="flex flex-col gap-2 bg-lab-900/50 p-3 rounded-lg border border-lab-700/50">
+                            <label class="flex items-center gap-2 text-xs cursor-pointer">
+                                <input type="checkbox" id="toggle-fbd" checked class="accent-sky-500 w-4 h-4 rounded bg-lab-800 border-lab-600">
+                                <span>Show Free Body Diagram (Vectors)</span>
+                            </label>
+                            <label class="flex items-center gap-2 text-xs cursor-pointer">
+                                <input type="checkbox" id="toggle-trace" class="accent-sky-500 w-4 h-4 rounded bg-lab-800 border-lab-600">
+                                <span>Show Motion Trace</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- GRAPHS TAB -->
+                    <div id="tab-graphs" class="hidden h-full flex-col">
+                        <div class="flex justify-between items-center mb-2">
+                            <select id="graph-select" class="bg-lab-800 border border-lab-600 rounded p-1 text-xs outline-none text-text-main shadow-sm">
+                                <option value="kinematics" selected>Kinematics (ω, α)</option>
+                                <option value="energy">Energy (PE, KE, Loss)</option>
+                                <option value="power">Power Dissipation</option>
+                            </select>
+                            <button id="btn-clear-graph" class="text-[10px] bg-lab-700 hover:bg-lab-600 px-2 py-1 rounded transition">Clear Plot</button>
+                        </div>
+                        <div class="flex-grow min-h-[250px] relative w-full bg-lab-900/30 rounded-lg border border-lab-700/50 p-2">
+                            <canvas id="simChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- MATH & TABLE TAB -->
+                    <div id="tab-math" class="hidden space-y-4">
+                        
+                        <!-- Observation Table -->
+                        <div>
+                            <div class="flex justify-between items-end mb-2">
+                                <h3 class="text-xs font-bold text-muted uppercase">Observations</h3>
+                                <div class="flex gap-1">
+                                    <button id="btn-record" disabled class="text-[10px] bg-sky-600 hover:bg-sky-500 text-white px-2 py-1 rounded transition shadow disabled:opacity-50 disabled:cursor-not-allowed">Record Trial</button>
+                                    <button id="btn-csv" class="text-[10px] bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded transition">CSV</button>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto rounded-lg border border-lab-700/50">
+                                <table class="w-full text-left text-[10px] whitespace-nowrap">
+                                    <thead class="bg-lab-800/80 text-muted font-semibold">
+                                        <tr>
+                                            <th class="p-1.5 px-2">Tr</th>
+                                            <th class="p-1.5">m(kg)</th>
+                                            <th class="p-1.5">\(N_1\)</th>
+                                            <th class="p-1.5">\(N_2\)</th>
+                                            <th class="p-1.5">\(\omega_{max}\)</th>
+                                            <th class="p-1.5 text-sky-400">\(I_{exp}\)</th>
+                                            <th class="p-1.5">Err%</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="obs-tbody" class="divide-y divide-lab-700/30 bg-lab-900/40 font-mono">
+                                        <!-- Rows injected here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Governing Equations -->
+                        <div>
+                            <h3 class="text-xs font-bold text-muted mb-2 uppercase">Governing Equations</h3>
+                            <div class="text-[11px] text-muted space-y-3 bg-lab-900/50 p-3 rounded-lg border border-lab-700/50 overflow-x-auto">
+                                
+                                <div><strong class="text-text-main">1. Falling Mass Phase (String Attached)</strong></div>
+                                <div>Newton's 2nd Law for translating mass:</div>
+                                <div class="text-center text-text-main py-1">$$ mg - T = ma = m(r\alpha) $$</div>
+                                <div>Rotational dynamics of flywheel:</div>
+                                <div class="text-center text-text-main py-1">$$ Tr - \tau_f = I\alpha $$</div>
+                                <div>Solving for Angular Acceleration \(\alpha\):</div>
+                                <div class="text-center text-text-main py-1">$$ \alpha = \frac{mgr - \tau_f}{I + mr^2} $$</div>
+                                
+                                <div class="mt-3"><strong class="text-text-main">2. Coasting Phase (String Detached)</strong></div>
+                                <div class="text-center text-text-main py-1">$$ \alpha = -\frac{\tau_f}{I} $$</div>
+
+                                <div class="mt-3"><strong class="text-text-main">3. Experimental Moment of Inertia (\(I\))</strong></div>
+                                <div>Using conservation of energy and work done against friction over \(N_1\) and \(N_2\) revolutions:</div>
+                                <div class="text-center text-sky-400 py-2 bg-lab-800/50 rounded font-bold">
+                                    $$ I_{exp} = \frac{m(2gh - r^2\omega_{max}^2)}{\omega_{max}^2 \left(1 + \frac{N_1}{N_2}\right)} $$
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Lab Report Format (For Print) -->
+    <div id="lab-report" class="no-print">
+        <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px;">
+            <h1 style="font-size: 24px; margin: 0;">PHYSICS LABORATORY REPORT</h1>
+            <h2 style="font-size: 18px; font-weight: normal; margin: 5px 0;">Experiment: Determination of the Moment of Inertia of a Flywheel</h2>
+        </div>
+        
+        <h3>1. Aim</h3>
+        <p>To determine the moment of inertia of a given flywheel about its axis of rotation and to calculate the frictional torque at the bearings.</p>
+        
+        <h3>2. Apparatus</h3>
+        <p>Flywheel mounted on horizontal bearings, mass hanger, slotted masses, cotton string, digital stopwatch, vernier caliper, meter scale.</p>
+
+        <h3>3. Formula Used</h3>
+        <p>The experimental moment of inertia \(I\) is given by:</p>
+        <p style="text-align: center; font-size: 16px; margin: 15px 0;">\( I = \frac{m(2gh - r^2\omega_{max}^2)}{\omega_{max}^2 \left(1 + \frac{N_1}{N_2}\right)} \)</p>
+        <p>Where:</p>
+        <ul>
+            <li>\(m\) = hanging mass</li>
+            <li>\(h\) = height of fall (string length)</li>
+            <li>\(r\) = radius of the axle</li>
+            <li>\(\omega_{max}\) = maximum angular velocity at detachment</li>
+            <li>\(N_1\) = number of revolutions during fall</li>
+            <li>\(N_2\) = number of revolutions during coasting before stopping</li>
+        </ul>
+
+        <h3>4. System Parameters</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-family: monospace;">
+            <tr style="border-bottom: 1px solid #ccc;">
+                <td style="padding: 5px;">Flywheel Material:</td><td id="rpt-mat"></td>
+                <td style="padding: 5px;">Flywheel Radius (R):</td><td id="rpt-R"></td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ccc;">
+                <td style="padding: 5px;">Flywheel Mass (M):</td><td id="rpt-M"></td>
+                <td style="padding: 5px;">Axle Radius (r):</td><td id="rpt-r"></td>
+            </tr>
+            <tr style="border-bottom: 1px solid #ccc;">
+                <td style="padding: 5px;">String Length (h):</td><td id="rpt-h"></td>
+                <td style="padding: 5px;">Gravity (g):</td><td id="rpt-g"></td>
+            </tr>
+            <tr>
+                <td style="padding: 5px;">Theoretical I:</td><td id="rpt-Ith" style="font-weight: bold;"></td>
+                <td style="padding: 5px;">Simulation Mode:</td><td id="rpt-mode"></td>
+            </tr>
+        </table>
+
+        <div class="print-break"></div>
+
+        <h3>5. Observation Table</h3>
+        <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 12px; margin-bottom: 20px;" border="1">
+            <thead style="background-color: #f0f0f0;">
+                <tr>
+                    <th style="padding: 8px;">Trial</th>
+                    <th style="padding: 8px;">Mass (m) kg</th>
+                    <th style="padding: 8px;">Fall Revs (N1)</th>
+                    <th style="padding: 8px;">Coast Revs (N2)</th>
+                    <th style="padding: 8px;">Max Ang Vel (\(\omega\)) rad/s</th>
+                    <th style="padding: 8px;">Exp Inertia (\(I\)) kg·m²</th>
+                    <th style="padding: 8px;">% Error</th>
+                </tr>
+            </thead>
+            <tbody id="rpt-tbody">
+                <!-- Data injected here -->
+            </tbody>
+        </table>
+
+        <h3>6. Result & Conclusion</h3>
+        <p>The moment of inertia of the given flywheel was determined experimentally. The theoretical value calculated from geometry and mass is <span id="rpt-res-Ith" style="font-weight:bold;"></span> kg·m².</p>
+        <p>The mean experimental value obtained is <span id="rpt-res-Iexp" style="font-weight:bold;">---</span> kg·m².</p>
+        <p>The mean percentage error is <span id="rpt-res-err" style="font-weight:bold;">---</span>%.</p>
+        <p style="margin-top: 20px; font-style: italic; font-size: 12px;">Generated automatically by Advanced Flywheel Dynamics Simulator.</p>
+    </div>
+
+    <script>
+        // --- CORE STATE & SETTINGS ---
+        const State = {
+            status: 'idle', // 'idle', 'ready', 'falling', 'coasting', 'stopped'
+            time: 0,
+            theta: 0,
+            omega: 0,
+            alpha: 0,
+            y: 0, // position of mass
+            massVel: 0,
+            tension: 0,
+            tau_fric: 0,
+            
+            // Experiment specifics
+            h: 1.5, // String length
+            N1: 0,
+            N2: 0,
+            omegaMax: 0,
+            unspooled: 0,
+            
+            // Energy
+            E_total_initial: 0,
+            PE: 0,
+            KE_rot: 0,
+            KE_trans: 0,
+            E_lost: 0,
+
+            // History for graphs
+            history: { t: [], w: [], a: [], pe: [], ke: [], loss: [], pwr: [] },
+            trials: []
+        };
+
+        const Params = {
+            rho: 7200,    // Density (kg/m3) Cast iron default
+            R: 0.2,       // Flywheel radius
+            r: 0.02,      // Axle radius
+            width: 0.04,  // Flywheel thickness
+            m: 2.0,       // Hanging mass
+            g: 9.81,
+            fricMult: 1.0,
+            
+            // Derived
+            M: 0,
+            I_th: 0,
+            
+            // Settings
+            mode: 'exp', // 'ideal' or 'exp'
+            simSpeed: 1.0,
+            mu_k: 0.008, // Base kinetic friction coeff
+            c_v: 0.002   // Base viscous damping
+        };
+
+        // UI Caching
+        const UI = {
+            btnWind: document.getElementById('btn-wind'),
+            btnRel: document.getElementById('btn-release'),
+            btnPause: document.getElementById('btn-pause'),
+            btnReset: document.getElementById('btn-reset'),
+            btnRecord: document.getElementById('btn-record'),
+            badge: document.getElementById('status-badge'),
+            
+            iTime: document.getElementById('inst-time'),
+            iOmega: document.getElementById('inst-omega'),
+            iRevs: document.getElementById('inst-revs'),
+            iN1: document.getElementById('inst-n1'),
+            iN2: document.getElementById('inst-n2'),
+            
+            dM: document.getElementById('dyn-M'),
+            dI: document.getElementById('dyn-I'),
+            dAlpha: document.getElementById('dyn-alpha'),
+            dTau: document.getElementById('dyn-tau'),
+            dTens: document.getElementById('dyn-tension'),
+            dTauf: document.getElementById('dyn-tauf'),
+            dV: document.getElementById('dyn-v'),
+            dA: document.getElementById('dyn-a'),
+            dMechE: document.getElementById('dyn-mechE'),
+            
+            barPE: document.getElementById('bar-pe'),
+            barKER: document.getElementById('bar-ke-rot'),
+            barKET: document.getElementById('bar-ke-trans'),
+            barLoss: document.getElementById('bar-loss'),
+            valPE: document.getElementById('val-pe'),
+            valKER: document.getElementById('val-ke-rot'),
+            valKET: document.getElementById('val-ke-trans'),
+            valLoss: document.getElementById('val-loss'),
+            
+            tbody: document.getElementById('obs-tbody')
+        };
+
+        let isPaused = false;
+        let animationFrameId;
+
+        // --- MATH & PHYSICS CALCULATIONS ---
+        
+        // Calculate Mass and Inertia from dimensions and material
+        function updateDerivedParams() {
+            // Volume of a cylinder = pi * R^2 * w
+            const vRim = Math.PI * Math.pow(Params.R, 2) * Params.width;
+            Params.M = vRim * Params.rho;
+            
+            // Standard Solid Disk approximation as requested by standard formulas
+            Params.I_th = 0.5 * Params.M * Math.pow(Params.R, 2);
+            
+            // Initial total energy if ready
+            if(State.status === 'idle' || State.status === 'ready') {
+                State.E_total_initial = Params.m * Params.g * State.h;
+            }
+
+            // Update UI reads
+            document.getElementById('val-R').innerText = Params.R.toFixed(3);
+            document.getElementById('val-r').innerText = Params.r.toFixed(3);
+            document.getElementById('val-m').innerText = Params.m.toFixed(2);
+            
+            UI.dM.innerText = Params.M.toFixed(2) + " kg";
+            UI.dI.innerText = Params.I_th.toFixed(4) + " kg·m²";
+        }
+
+        // Add Gaussian noise for experimental mode
+        function getNoise(amplitude) {
+            if(Params.mode === 'ideal') return 0;
+            // Box-Muller transform
+            let u = 0, v = 0;
+            while(u === 0) u = Math.random();
+            while(v === 0) v = Math.random();
+            return amplitude * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+        }
+
+        // Core Integration Step (Semi-Implicit Euler)
+        function stepPhysics(dt) {
+            if(State.status === 'idle' || State.status === 'ready' || State.status === 'stopped' || isPaused) return;
+
+            const I = Params.I_th;
+            const r = Params.r;
+            const m = Params.m;
+            const g = Params.g;
+
+            // Friction Model
+            // Normal force on bearing: Weight of flywheel + tension (if attached)
+            let F_n = Params.M * g;
+            if(State.status === 'falling') F_n += m * g; // Approx
+
+            // Torque from friction: kinetic (Coulomb) + viscous (air/bearing fluid)
+            let tau_k = Params.fricMult * Params.mu_k * F_n * r;
+            let tau_v = Params.fricMult * Params.c_v * Math.abs(State.omega);
+            
+            // Random bearing wear variation
+            if(Params.mode === 'exp') tau_k *= (1 + getNoise(0.05));
+
+            State.tau_fric = (tau_k + tau_v);
+            if (State.omega < 0) State.tau_fric *= -1; // Oppose motion
+
+            if (State.status === 'falling') {
+                const tau_drive = m * g * r;
+                
+                // Static check
+                if (State.omega === 0 && tau_drive <= tau_k) {
+                    State.alpha = 0;
+                    State.tension = m * g;
+                } else {
+                    // Coupled system acceleration
+                    State.alpha = (tau_drive - State.tau_fric) / (I + m * r * r);
+                    State.tension = m * (g - State.alpha * r);
+                }
+
+                State.omega += State.alpha * dt;
+                State.theta += State.omega * dt;
+                
+                State.unspooled = State.theta * r;
+                State.y = -State.unspooled;
+                State.massVel = State.omega * r;
+
+                // Energy
+                State.PE = m * g * (State.h - State.unspooled);
+                State.KE_trans = 0.5 * m * State.massVel * State.massVel;
+
+                // Detachment condition
+                if (State.unspooled >= State.h) {
+                    State.status = 'coasting';
+                    State.N1 = State.theta / (2 * Math.PI);
+                    State.omegaMax = State.omega;
+                    State.tension = 0;
+                    State.y = -State.h; 
+                    
+                    updateStatusUI("COASTING", "text-blue-400 border-blue-500 bg-blue-900/30");
+                }
+
+            } else if (State.status === 'coasting') {
+                State.tension = 0;
+                State.alpha = -State.tau_fric / I;
+                
+                State.omega += State.alpha * dt;
+                
+                if (State.omega <= 0 && State.alpha < 0) {
+                    // Stopped
+                    State.omega = 0;
+                    State.alpha = 0;
+                    State.status = 'stopped';
+                    State.N2 = (State.theta / (2 * Math.PI)) - State.N1;
+                    
+                    updateStatusUI("STOPPED", "text-rose-400 border-rose-500 bg-rose-900/30");
+                    UI.btnRecord.disabled = false;
+                } else {
+                    State.theta += State.omega * dt;
+                }
+
+                // Mass free fall simulation for visual purposes
+                if(State.y > -3.0) {
+                    State.massVel += g * dt; // downwards is positive accel in our relative frame visually
+                    State.y -= State.massVel * dt;
+                }
+                
+                State.PE = 0;
+                State.KE_trans = 0;
+            }
+
+            // Common updates
+            State.KE_rot = 0.5 * I * State.omega * State.omega;
+            const powerFric = State.tau_fric * State.omega;
+            State.E_lost += Math.abs(powerFric) * dt;
+            State.time += dt;
+
+            recordHistoryData(powerFric);
+        }
+
+        const ctxChart = document.getElementById('simChart').getContext('2d');
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        const simChart = new Chart(ctxChart, {
+            type: 'line',
+            data: { labels: [], datasets: [] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: { mode: 'index', intersect: false },
+                elements: { point: { radius: 0 } },
+                scales: {
+                    x: { title: { display: true, text: 'Time (s)' }, grid: { color: 'rgba(71, 85, 105, 0.2)' } },
+                    y: { grid: { color: 'rgba(71, 85, 105, 0.2)' } }
+                }
+            }
+        });
+
+        function setupGraphMode(mode) {
+            let datasets = [];
+            if(mode === 'kinematics') {
+                datasets = [
+                    { label: 'ω (rad/s)', data: State.history.w, borderColor: '#34d399', borderWidth: 2, tension: 0.1 },
+                    { label: 'α (rad/s²)', data: State.history.a, borderColor: '#fbbf24', borderWidth: 2, tension: 0.1, borderDash: [5, 5] }
+                ];
+                simChart.options.scales.y.title = { display: true, text: 'Kinematics' };
+            } else if (mode === 'energy') {
+                datasets = [
+                    { label: 'PE (J)', data: State.history.pe, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, borderWidth: 1 },
+                    { label: 'KE_rot (J)', data: State.history.ke, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, borderWidth: 1 },
+                    { label: 'Loss (J)', data: State.history.loss, borderColor: '#f43f5e', backgroundColor: 'rgba(244, 63, 94, 0.1)', fill: true, borderWidth: 1 }
+                ];
+                simChart.options.scales.y.title = { display: true, text: 'Energy (Joules)' };
+            } else if (mode === 'power') {
+                datasets = [
+                    { label: 'Friction Power (W)', data: State.history.pwr, borderColor: '#f43f5e', borderWidth: 2, tension: 0.1 }
+                ];
+                simChart.options.scales.y.title = { display: true, text: 'Power (Watts)' };
+            }
+            simChart.data.labels = State.history.t;
+            simChart.data.datasets = datasets;
+            simChart.update();
+        }
+
+        let historyCounter = 0;
+        function recordHistoryData(power) {
+            historyCounter++;
+            if(historyCounter % 4 !== 0) return; // Throttle to ~15hz visually
+            
+            State.history.t.push(State.time.toFixed(2));
+            State.history.w.push(State.omega.toFixed(2));
+            State.history.a.push(State.alpha.toFixed(2));
+            State.history.pe.push(State.PE.toFixed(2));
+            State.history.ke.push(State.KE_rot.toFixed(2));
+            State.history.loss.push(State.E_lost.toFixed(2));
+            State.history.pwr.push(Math.abs(power).toFixed(2));
+
+            // Keep max points to prevent lag
+            if(State.history.t.length > 500) {
+                for(let key in State.history) State.history[key].shift();
+            }
+            
+            // Only update chart if tab is visible for performance
+            if(!document.getElementById('tab-graphs').classList.contains('hidden')) {
+                simChart.update();
+            }
+        }
+
+        document.getElementById('graph-select').addEventListener('change', (e) => setupGraphMode(e.target.value));
+        document.getElementById('btn-clear-graph').addEventListener('click', () => {
+            for(let key in State.history) State.history[key] = [];
+            simChart.update();
+        });
+
+
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0f172a, 0.1);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(1.2, 1.0, 2.0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 0.5, 0);
+        controls.maxPolarAngle = Math.PI / 2 + 0.1; // Don't go too far below floor
+
+        // Lighting
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444455, 0.6);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(3, 5, 2);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        const spotLight = new THREE.SpotLight(0x38bdf8, 2);
+        spotLight.position.set(-2, 3, 2);
+        spotLight.angle = Math.PI/6;
+        spotLight.penumbra = 0.5;
+        scene.add(spotLight);
+
+        // Materials
+        const materials = {
+            steel: new THREE.MeshStandardMaterial({ color: 0xa0aec0, roughness: 0.3, metalness: 0.8 }),
+            castIron: new THREE.MeshStandardMaterial({ color: 0x2d3748, roughness: 0.8, metalness: 0.3 }),
+            brass: new THREE.MeshStandardMaterial({ color: 0xd69e2e, roughness: 0.3, metalness: 0.9 }),
+            aluminium: new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.4, metalness: 0.6 }),
+            table: new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 }),
+            string: new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 })
+        };
+
+        let currentFWMaterial = materials.castIron;
+
+        // Assembly
+        const labGroup = new THREE.Group();
+        scene.add(labGroup);
+
+        // Table
+        const table = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 1.5), materials.table);
+        table.position.y = -0.05;
+        table.receiveShadow = true;
+        labGroup.add(table);
+
+        // Stand
+        const standMat = materials.steel;
+        const base = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.3), standMat);
+        base.position.y = 0.025;
+        base.castShadow = true; base.receiveShadow = true;
+        labGroup.add(base);
+
+        const supportL = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.6, 0.15), standMat);
+        supportL.position.set(-0.2, 0.3, 0);
+        supportL.castShadow = true; supportL.receiveShadow = true;
+        const supportR = supportL.clone();
+        supportR.position.set(0.2, 0.3, 0);
+        labGroup.add(supportL, supportR);
+
+        // Rotating System Group
+        const rotorGroup = new THREE.Group();
+        rotorGroup.position.set(0, 0.6, 0);
+        labGroup.add(rotorGroup);
+
+        // Axle
+        let axleMesh;
+        function createAxle() {
+            if(axleMesh) rotorGroup.remove(axleMesh);
+            const geo = new THREE.CylinderGeometry(Params.r, Params.r, 0.5, 32);
+            geo.rotateZ(Math.PI/2);
+            axleMesh = new THREE.Mesh(geo, materials.steel);
+            axleMesh.castShadow = true;
+            rotorGroup.add(axleMesh);
+        }
+
+        // Flywheel
+        let fwMesh;
+        function createFlywheel() {
+            if(fwMesh) rotorGroup.remove(fwMesh);
+            const fwLocalGroup = new THREE.Group();
+
+            // Rim
+            const rimGeo = new THREE.TorusGeometry(Params.R - Params.width/2, Params.width/2, 16, 64);
+            rimGeo.rotateY(Math.PI/2);
+            const rim = new THREE.Mesh(rimGeo, currentFWMaterial);
+            rim.castShadow = true;
+            fwLocalGroup.add(rim);
+
+            // Hub
+            const hubGeo = new THREE.CylinderGeometry(Params.r*2, Params.r*2, Params.width, 32);
+            hubGeo.rotateZ(Math.PI/2);
+            const hub = new THREE.Mesh(hubGeo, currentFWMaterial);
+            hub.castShadow = true;
+            fwLocalGroup.add(hub);
+
+            // Spokes
+            for(let i=0; i<6; i++) {
+                const spokeGeo = new THREE.CylinderGeometry(0.006, 0.006, Params.R, 16);
+                const spoke = new THREE.Mesh(spokeGeo, currentFWMaterial);
+                spoke.rotation.x = (i * Math.PI)/3;
+                spoke.castShadow = true;
+                fwLocalGroup.add(spoke);
+            }
+
+            // Visual Marker
+            const marker = new THREE.Mesh(new THREE.SphereGeometry(0.015, 16, 16), materials.brass);
+            marker.position.set(Params.width/2, Params.R - Params.width/2, 0);
+            fwLocalGroup.add(marker);
+
+            fwMesh = fwLocalGroup;
+            rotorGroup.add(fwMesh);
+        }
+
+        // Mass System
+        const massGroup = new THREE.Group();
+        labGroup.add(massGroup);
+
+        const massObj = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.06, 32), materials.brass);
+        massObj.castShadow = true;
+        massGroup.add(massObj);
+
+        // String (Line & Spool)
+        const stringGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        const stringLine = new THREE.Line(stringGeo, materials.string);
+        massGroup.add(stringLine);
+
+        const spoolGeo = new THREE.CylinderGeometry(Params.r + 0.001, Params.r + 0.001, 0.03, 32);
+        spoolGeo.rotateZ(Math.PI/2);
+        const spool = new THREE.Mesh(spoolGeo, new THREE.MeshBasicMaterial({color: 0xeeeeee}));
+        spool.position.set(-0.15, 0, 0);
+        rotorGroup.add(spool);
+
+        // Vectors (FBD)
+        const vecGroup = new THREE.Group();
+        scene.add(vecGroup);
+        const aMg = new THREE.ArrowHelper(new THREE.Vector3(0,-1,0), new THREE.Vector3(), 1, 0xff3333, 0.04, 0.03);
+        const aT1 = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(), 1, 0x33ff33, 0.04, 0.03);
+        const aT2 = new THREE.ArrowHelper(new THREE.Vector3(0,-1,0), new THREE.Vector3(), 1, 0x33ff33, 0.04, 0.03);
+        vecGroup.add(aMg, aT1, aT2);
+
+
+        function update3D() {
+            rotorGroup.rotation.x = -State.theta; // Rotation axis
+
+            const tangX = -0.15; // Spool pos
+            const tangZ = Params.r; // Tangent point
+            
+            if (State.status === 'idle' || State.status === 'ready' || State.status === 'falling') {
+                spool.visible = true;
+                let ratio = Math.max(0, 1 - State.unspooled/State.h);
+                spool.scale.set(1, ratio, ratio);
+
+                let mY = 0.6 - Params.r + State.y;
+                massObj.position.set(tangX, mY, tangZ);
+                massObj.visible = true;
+
+                const pos = stringLine.geometry.attributes.position.array;
+                pos[0] = tangX; pos[1] = 0.6; pos[2] = tangZ;
+                pos[3] = tangX; pos[4] = mY + 0.03; pos[5] = tangZ; // anchor to top of mass
+                stringLine.geometry.attributes.position.needsUpdate = true;
+                stringLine.visible = true;
+            } else {
+                spool.visible = false;
+                stringLine.visible = false;
+                massObj.position.set(tangX, 0.6 - Params.r + State.y, tangZ);
+                massObj.visible = State.y > -2.0;
+            }
+
+            // FBD Updates
+            if(document.getElementById('toggle-fbd').checked && (State.status === 'falling' || State.status === 'ready')) {
+                vecGroup.visible = true;
+                let mY = massObj.position.y;
+                aMg.position.set(tangX, mY, tangZ); aMg.setLength(Params.m * 0.1);
+                aT1.position.set(tangX, mY + 0.03, tangZ); aT1.setLength(State.tension * 0.1);
+                aT2.position.set(tangX, 0.6, tangZ); aT2.setLength(State.tension * 0.1);
+            } else {
+                vecGroup.visible = false;
+            }
+        }
+
+        function updateUIDisplay() {
+            // Add slight noise to display if experimental
+            let wDisp = State.omega;
+            let tDisp = State.time;
+            if(Params.mode === 'exp' && State.status !== 'idle' && State.status !== 'stopped') {
+                wDisp += getNoise(0.02);
+            }
+
+            UI.iTime.innerText = tDisp.toFixed(3);
+            UI.iOmega.innerText = wDisp.toFixed(2);
+            
+            let revs = State.theta / (2*Math.PI);
+            UI.iRevs.innerText = revs.toFixed(3);
+            
+            if(State.status === 'falling') UI.iN1.innerText = revs.toFixed(2);
+            if(State.status === 'coasting') UI.iN2.innerText = (revs - State.N1).toFixed(2);
+
+            // Dynamics Engine Table
+            UI.dAlpha.innerText = State.alpha.toFixed(3) + " rad/s²";
+            let netT = (State.status === 'falling' ? State.tension * Params.r : 0) - State.tau_fric;
+            UI.dTau.innerText = netT.toFixed(3) + " N·m";
+            UI.dTens.innerText = State.tension.toFixed(2) + " N";
+            UI.dTauf.innerText = Math.abs(State.tau_fric).toFixed(4) + " N·m";
+            UI.dV.innerText = State.massVel.toFixed(2) + " m/s";
+            UI.dA.innerText = (State.alpha * Params.r).toFixed(2) + " m/s²";
+
+            // Energies
+            let totalE = State.PE + State.KE_rot + State.KE_trans + State.E_lost;
+            UI.dMechE.innerText = totalE.toFixed(2) + " J";
+            
+            let Ebase = State.E_total_initial || 1; // prevent div by zero
+            UI.barPE.style.width = Math.min(100, (State.PE/Ebase)*100) + "%";
+            UI.barKER.style.width = Math.min(100, (State.KE_rot/Ebase)*100) + "%";
+            UI.barKET.style.width = Math.min(100, (State.KE_trans/Ebase)*100) + "%";
+            UI.barLoss.style.width = Math.min(100, (State.E_lost/Ebase)*100) + "%";
+
+            UI.valPE.innerText = State.PE.toFixed(2) + " J";
+            UI.valKER.innerText = State.KE_rot.toFixed(2) + " J";
+            UI.valKET.innerText = State.KE_trans.toFixed(2) + " J";
+            UI.valLoss.innerText = State.E_lost.toFixed(2) + " J";
+        }
+
+        function updateStatusUI(text, classes) {
+            UI.badge.innerText = text;
+            UI.badge.className = `px-2 py-0.5 rounded text-[10px] font-bold border ${classes}`;
+        }
+
+        // Action Buttons
+        UI.btnWind.addEventListener('click', () => {
+            if(State.status === 'idle' || State.status === 'stopped') {
+                resetSim();
+                State.status = 'ready';
+                updateStatusUI("READY", "text-amber-400 border-amber-500 bg-amber-900/30");
+                UI.btnRel.disabled = false;
+                UI.btnPause.disabled = true;
+                update3D();
+                updateUIDisplay();
+            }
+        });
+
+        UI.btnRel.addEventListener('click', () => {
+            if(State.status === 'ready') {
+                State.status = 'falling';
+                State.E_total_initial = Params.m * Params.g * State.h;
+                updateStatusUI("FALLING", "text-emerald-400 border-emerald-500 bg-emerald-900/30 animate-pulse");
+                UI.btnRel.disabled = true;
+                UI.btnPause.disabled = false;
+            }
+        });
+
+        UI.btnPause.addEventListener('click', () => {
+            isPaused = !isPaused;
+            UI.btnPause.innerText = isPaused ? "Resume" : "Pause / Play";
+            UI.btnPause.classList.toggle('bg-amber-600');
+            UI.btnPause.classList.toggle('bg-purple-600');
+            if(isPaused) updateStatusUI("PAUSED", "text-purple-400 border-purple-500 bg-purple-900/30");
+            else updateStatusUI(State.status.toUpperCase(), "text-emerald-400 border-emerald-500 bg-emerald-900/30");
+        });
+
+        UI.btnReset.addEventListener('click', resetSim);
+
+        function resetSim() {
+            State.status = 'idle';
+            State.time = 0; State.theta = 0; State.omega = 0; State.alpha = 0;
+            State.y = 0; State.massVel = 0; State.tension = 0; State.unspooled = 0;
+            State.PE = 0; State.KE_rot = 0; State.KE_trans = 0; State.E_lost = 0;
+            State.N1 = 0; State.N2 = 0; State.omegaMax = 0;
+            isPaused = false;
+
+            updateDerivedParams();
+            updateStatusUI("IDLE", "text-slate-300 border-slate-500 bg-slate-800");
+            
+            UI.btnRel.disabled = true;
+            UI.btnPause.disabled = true;
+            UI.btnPause.innerText = "Pause / Play";
+            UI.btnPause.className = "bg-amber-600 hover:bg-amber-500 text-white py-1.5 rounded text-xs font-semibold transition disabled:opacity-40";
+            UI.btnRecord.disabled = true;
+
+            UI.iN1.innerText = "0.00";
+            UI.iN2.innerText = "0.00";
+
+            update3D();
+            updateUIDisplay();
+        }
+
+        // Inputs Binding
+        const bindInput = (id, paramKey, updateGeom=false) => {
+            document.getElementById(id).addEventListener('input', (e) => {
+                Params[paramKey] = parseFloat(e.target.value);
+                updateDerivedParams();
+                if(updateGeom) { createAxle(); createFlywheel(); update3D(); }
+            });
+        };
+
+        bindInput('param-R', 'R', true);
+        bindInput('param-r', 'r', true);
+        bindInput('param-m', 'm');
+        bindInput('param-g', 'g');
+        bindInput('param-fric', 'fricMult');
+        bindInput('ctrl-speed', 'simSpeed');
+        
+        document.getElementById('param-mat').addEventListener('change', (e) => {
+            Params.rho = parseFloat(e.target.value);
+            const mats = { 7850: materials.steel, 7200: materials.castIron, 8500: materials.brass, 2700: materials.aluminium };
+            currentFWMaterial = mats[Params.rho] || materials.castIron;
+            updateDerivedParams();
+            createFlywheel();
+            update3D();
+        });
+
+        document.getElementById('param-mode').addEventListener('change', (e) => {
+            Params.mode = e.target.value;
+        });
+
+        // Tabs Logic
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tab-btn').forEach(b => {
+                    b.classList.remove('active', 'text-sky-400', 'border-b-2', 'border-sky-400');
+                    b.classList.add('text-muted');
+                });
+                e.target.classList.remove('text-muted');
+                e.target.classList.add('active', 'text-sky-400', 'border-b-2', 'border-sky-400');
+                
+                ['tab-live', 'tab-graphs', 'tab-math'].forEach(id => document.getElementById(id).classList.add('hidden'));
+                document.getElementById('tab-' + e.target.dataset.tab).classList.remove('hidden');
+                
+                if(e.target.dataset.tab === 'graphs') simChart.update();
+            });
+        });
+
+        // Theme Toggle
+        document.getElementById('btn-theme').addEventListener('click', () => {
+            document.documentElement.classList.toggle('light');
+            const isLight = document.documentElement.classList.contains('light');
+            scene.background = new THREE.Color(isLight ? 0xf1f5f9 : 0x0f172a);
+            scene.fog.color.setHex(isLight ? 0xf1f5f9 : 0x0f172a);
+            hemiLight.intensity = isLight ? 0.9 : 0.6;
+        });
+
+        UI.btnRecord.addEventListener('click', () => {
+            if(State.status !== 'stopped') return;
+
+            const m = Params.m;
+            const r = Params.r;
+            const h = State.h;
+            const wMax = State.omegaMax;
+            const n1 = State.N1;
+            const n2 = State.N2;
+            const g = Params.g;
+
+            // Lab Formula
+            const num = m * (2 * g * h - Math.pow(r * wMax, 2));
+            const den = Math.pow(wMax, 2) * (1 + (n1 / n2));
+            const I_exp = num / den;
+            
+            const err = Math.abs((I_exp - Params.I_th) / Params.I_th) * 100;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="p-1.5 px-2">${State.trials.length + 1}</td>
+                <td class="p-1.5">${m.toFixed(2)}</td>
+                <td class="p-1.5">${n1.toFixed(2)}</td>
+                <td class="p-1.5">${n2.toFixed(2)}</td>
+                <td class="p-1.5">${wMax.toFixed(2)}</td>
+                <td class="p-1.5 text-sky-400 font-bold">${I_exp.toFixed(4)}</td>
+                <td class="p-1.5 ${err > 5 ? 'text-rose-400' : 'text-emerald-400'}">${err.toFixed(2)}%</td>
+            `;
+            UI.tbody.appendChild(tr);
+
+            State.trials.push({m, n1, n2, wMax, I_exp, err});
+            UI.btnRecord.disabled = true; // prevent multi record
+        });
+
+        document.getElementById('btn-csv').addEventListener('click', () => {
+            let csv = "Trial,Mass(kg),N1,N2,OmegaMax,I_exp,Error%\n";
+            State.trials.forEach((t, i) => {
+                csv += `${i+1},${t.m},${t.n1},${t.n2},${t.wMax},${t.I_exp},${t.err}\n`;
+            });
+            const blob = new Blob([csv], {type: 'text/csv'});
+            const a = document.createElement('a');
+            a.href = window.URL.createObjectURL(blob);
+            a.download = 'Flywheel_Data.csv';
+            a.click();
+        });
+
+        document.getElementById('btn-report').addEventListener('click', () => {
+            // Populate report fields
+            const matSelect = document.getElementById('param-mat');
+            document.getElementById('rpt-mat').innerText = matSelect.options[matSelect.selectedIndex].text;
+            document.getElementById('rpt-R').innerText = Params.R.toFixed(3) + " m";
+            document.getElementById('rpt-M').innerText = Params.M.toFixed(2) + " kg";
+            document.getElementById('rpt-r').innerText = Params.r.toFixed(3) + " m";
+            document.getElementById('rpt-h').innerText = State.h.toFixed(3) + " m";
+            document.getElementById('rpt-g').innerText = Params.g.toFixed(2) + " m/s²";
+            document.getElementById('rpt-Ith').innerText = Params.I_th.toFixed(4) + " kg·m²";
+            document.getElementById('rpt-mode').innerText = Params.mode === 'exp' ? 'Experimental (with error)' : 'Ideal';
+
+            // Populate table
+            const tBody = document.getElementById('rpt-tbody');
+            tBody.innerHTML = '';
+            let sumI = 0, sumErr = 0;
+            State.trials.forEach((t, i) => {
+                sumI += t.I_exp; sumErr += t.err;
+                tBody.innerHTML += `<tr>
+                    <td>${i+1}</td><td>${t.m.toFixed(2)}</td><td>${t.n1.toFixed(2)}</td>
+                    <td>${t.n2.toFixed(2)}</td><td>${t.wMax.toFixed(2)}</td>
+                    <td>${t.I_exp.toFixed(4)}</td><td>${t.err.toFixed(2)}%</td>
+                </tr>`;
+            });
+
+            const count = State.trials.length;
+            document.getElementById('rpt-res-Ith').innerText = Params.I_th.toFixed(4);
+            document.getElementById('rpt-res-Iexp').innerText = count > 0 ? (sumI/count).toFixed(4) : "---";
+            document.getElementById('rpt-res-err').innerText = count > 0 ? (sumErr/count).toFixed(2) : "---";
+
+            window.print();
+        });
+
+
+        const clock = new THREE.Clock();
+        
+        function animate() {
+            animationFrameId = requestAnimationFrame(animate);
+            
+            let dt = clock.getDelta();
+            if(dt > 0.1) dt = 0.1; // Cap dt
+            
+            // Apply simulation speed multiplier
+            dt *= Params.simSpeed;
+
+            // Calculate physics steps (multiple smaller steps for better numerical stability)
+            const subSteps = 5;
+            const simDt = dt / subSteps;
+            for(let i=0; i<subSteps; i++) {
+                stepPhysics(simDt);
+            }
+
+            update3D();
+            updateUIDisplay();
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize
+        createAxle();
+        createFlywheel();
+        updateDerivedParams();
+        setupGraphMode('kinematics');
+        resetSim();
+        
+        // Initial setup for theme
+        scene.background = new THREE.Color(0x0f172a);
+        
+        // Start loop
+        animate();
+
+    </script>
+</body>
+</html>

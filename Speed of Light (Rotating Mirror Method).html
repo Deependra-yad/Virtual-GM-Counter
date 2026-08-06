@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Determination of Speed of Light - Virtual Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        lab: {
+                            base: '#020617', // slate-950
+                            panel: '#0f172a', // slate-900
+                            element: '#1e293b', // slate-800
+                            border: '#334155', // slate-700
+                            accent: '#38bdf8', // sky-400
+                            highlight: '#818cf8' // indigo-400
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body { 
+            background-color: #020617; 
+            color: #f8fafc; 
+            margin: 0; 
+            overflow: hidden; /* Prevent body scroll, handle inside components */
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none; 
+            width: 100%; 
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; 
+            height: 18px; 
+            width: 18px; 
+            border-radius: 50%;
+            background: #38bdf8; 
+            cursor: pointer; 
+            margin-top: -7px; 
+            box-shadow: 0 0 10px rgba(56,189,248,0.6);
+            border: 2px solid #fff;
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; 
+            height: 4px; 
+            cursor: pointer; 
+            background: #334155; 
+            border-radius: 2px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        /* Glassmorphism utilities */
+        .glass {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .canvas-container { position: relative; width: 100%; height: 100%; }
+        #canvas3d { display: block; width: 100%; height: 100%; outline: none; }
+        
+        /* Crosshair for micrometer */
+        .crosshair-cursor { cursor: crosshair; }
+    </style>
+</head>
+<body class="font-sans antialiased text-sm h-screen flex flex-col md:flex-row">
+
+    <!-- Sidebar Controls -->
+    <aside class="w-full md:w-80 bg-lab-panel border-r border-lab-border flex flex-col z-20 h-[40vh] md:h-screen shrink-0 overflow-y-auto shadow-2xl">
+        <!-- Logo/Header -->
+        <div class="p-4 border-b border-lab-border bg-lab-base flex items-center gap-3 sticky top-0 z-10">
+            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <i class="fa-solid fa-lightbulb text-white text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-bold tracking-tight text-white leading-tight">Foucault's Simulator</h1>
+                <p class="text-[11px] text-slate-400 font-medium tracking-wide uppercase">Speed of Light</p>
+            </div>
+        </div>
+
+        <div class="p-4 flex flex-col gap-6 flex-1">
+            <!-- Apparatus Controls -->
+            <div class="space-y-4">
+                <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-sliders"></i> Parameters
+                </h2>
+                
+                <!-- RPM -->
+                <div class="bg-lab-element p-3 rounded-lg border border-lab-border">
+                    <div class="flex justify-between text-xs mb-2">
+                        <label class="font-semibold text-slate-200">Mirror Speed</label>
+                        <span class="font-mono text-lab-accent bg-lab-base px-2 py-0.5 rounded" id="rpm-val">30,000 RPM</span>
+                    </div>
+                    <input type="range" id="param-rpm" min="0" max="50000" step="100" value="30000">
+                    <div class="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                        <span>0</span><span>50,000</span>
+                    </div>
+                </div>
+
+                <!-- L Distance -->
+                <div class="bg-lab-element p-3 rounded-lg border border-lab-border">
+                    <div class="flex justify-between text-xs mb-2">
+                        <label class="font-semibold text-slate-200" title="Distance from Rotating to Fixed Mirror">Distance L</label>
+                        <span class="font-mono text-lab-accent bg-lab-base px-2 py-0.5 rounded" id="L-val">15.0 m</span>
+                    </div>
+                    <input type="range" id="param-L" min="2" max="50" step="0.5" value="15">
+                    <div class="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                        <span>2m</span><span>50m</span>
+                    </div>
+                </div>
+
+                <!-- D Distance -->
+                <div class="bg-lab-element p-3 rounded-lg border border-lab-border">
+                    <div class="flex justify-between text-xs mb-2">
+                        <label class="font-semibold text-slate-200" title="Distance from Rotating Mirror to Screen">Distance D</label>
+                        <span class="font-mono text-lab-accent bg-lab-base px-2 py-0.5 rounded" id="D-val">5.0 m</span>
+                    </div>
+                    <input type="range" id="param-D" min="1" max="15" step="0.1" value="5">
+                    <div class="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
+                        <span>1m</span><span>15m</span>
+                    </div>
+                </div>
+
+                <!-- Laser Color -->
+                <div class="bg-lab-element p-3 rounded-lg border border-lab-border flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-200">Laser Source</span>
+                    <div class="flex gap-2">
+                        <button onclick="setLaserColor(0xff3333, this)" class="laser-btn w-6 h-6 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] border-2 border-transparent hover:scale-110 transition"></button>
+                        <button onclick="setLaserColor(0x22c55e, this)" class="laser-btn w-6 h-6 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)] border-2 border-white hover:scale-110 transition"></button>
+                        <button onclick="setLaserColor(0x3b82f6, this)" class="laser-btn w-6 h-6 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] border-2 border-transparent hover:scale-110 transition"></button>
+                    </div>
+                </div>
+                
+                <!-- Noise Toggle -->
+                <label class="flex items-center gap-3 p-3 bg-lab-element rounded-lg border border-lab-border cursor-pointer hover:bg-slate-700/50 transition">
+                    <div class="relative flex items-center">
+                        <input type="checkbox" id="param-noise" checked class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                    </div>
+                    <span class="text-xs font-semibold text-slate-300">Simulate Experimental Error</span>
+                </label>
+            </div>
+            
+            <!-- Live Physics Data -->
+            <div class="mt-2 space-y-3">
+                <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-microchip"></i> Live Physics Engine
+                </h2>
+                <div class="bg-lab-element p-3 rounded-lg border border-lab-border font-mono text-[11px] grid grid-cols-2 gap-y-2">
+                    <div class="text-slate-400">c (Accepted):</div>
+                    <div class="text-right text-slate-200">2.9979 × 10⁸ m/s</div>
+                    
+                    <div class="text-slate-400">Angular Vel (ω):</div>
+                    <div class="text-right text-lab-accent" id="live-omega">0 rad/s</div>
+                    
+                    <div class="text-slate-400">Round-trip (t):</div>
+                    <div class="text-right text-lab-accent" id="live-time">0 ns</div>
+                    
+                    <div class="text-slate-400">Mirror Shift (Δθ):</div>
+                    <div class="text-right text-orange-400" id="live-dtheta">0 rad</div>
+                    
+                    <div class="col-span-2 border-t border-slate-700 my-1"></div>
+                    
+                    <div class="text-slate-400 font-bold">Ideal Shift (Δx):</div>
+                    <div class="text-right text-green-400 font-bold" id="live-dx">0.000 mm</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-[60vh] md:h-screen overflow-hidden bg-lab-base relative">
+        
+        <!-- Top Utility Bar -->
+        <header class="absolute top-0 right-0 left-0 p-4 flex justify-end gap-3 z-10 pointer-events-none">
+            <div class="pointer-events-auto flex gap-2">
+                <button onclick="resetCamera()" class="glass hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg shadow transition text-xs flex items-center gap-2" title="Reset 3D View">
+                    <i class="fa-solid fa-video"></i> Reset View
+                </button>
+                <button onclick="generateReport()" class="bg-blue-600/90 hover:bg-blue-500 backdrop-blur text-white px-4 py-1.5 rounded-lg shadow-lg shadow-blue-900/50 transition text-xs flex items-center gap-2 font-semibold border border-blue-400/30">
+                    <i class="fa-solid fa-file-pdf"></i> Generate Report
+                </button>
+            </div>
+        </header>
+
+        <!-- 3D Visualization -->
+        <div class="h-1/2 md:h-3/5 w-full relative bg-black/50 border-b border-lab-border">
+            <div id="canvas3d" class="absolute inset-0 cursor-move"></div>
+            <!-- On-screen 3D overlay -->
+            <div class="absolute bottom-4 left-4 glass px-3 py-2 rounded-lg pointer-events-none">
+                <div class="text-xs font-semibold text-white flex items-center gap-2 mb-1">
+                    <i class="fa-solid fa-cube text-lab-accent"></i> 3D Optical Bench
+                </div>
+                <div class="text-[10px] text-slate-400">Left Click: Rotate | Right Click: Pan | Scroll: Zoom</div>
+                <div class="text-[10px] text-yellow-500/80 mt-1 italic">*Ray reflection angles are exaggerated for visibility.</div>
+            </div>
+        </div>
+
+        <!-- Bottom Panel: Measurement & Data -->
+        <div class="h-1/2 md:h-2/5 w-full flex flex-col md:flex-row bg-lab-panel">
+            
+            <!-- Micrometer Section -->
+            <div class="w-full md:w-1/2 lg:w-2/5 border-r border-lab-border flex flex-col">
+                <div class="bg-lab-element px-4 py-2 border-b border-lab-border flex justify-between items-center shrink-0">
+                    <h2 class="text-xs font-bold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-microscope text-green-400"></i> Micrometer Eyepiece
+                    </h2>
+                    <div class="text-xs bg-slate-900 px-2 py-1 rounded border border-slate-700 font-mono text-white flex items-center gap-2">
+                        <span>MEAS:</span>
+                        <input type="number" id="micro-num-input" value="0.000" step="0.001" class="bg-transparent w-16 text-right outline-none text-green-400 font-bold appearance-none">
+                        <span>mm</span>
+                    </div>
+                </div>
+                
+                <!-- Canvas Container -->
+                <div class="flex-1 relative crosshair-cursor overflow-hidden bg-black" id="micrometer-container">
+                    <canvas id="micrometer-canvas" class="absolute inset-0 w-full h-full"></canvas>
+                </div>
+                
+                <!-- Fine Controls -->
+                <div class="bg-lab-element p-3 border-t border-lab-border shrink-0">
+                    <div class="flex items-center gap-3">
+                        <button onclick="adjustMicrometer(-0.01)" class="w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-white transition"><i class="fa-solid fa-minus"></i></button>
+                        <input type="range" id="micrometer-slider" min="-10" max="10" step="0.001" value="0" class="flex-1">
+                        <button onclick="adjustMicrometer(0.01)" class="w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-white transition"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                    
+                    <button onclick="recordMeasurement()" class="w-full mt-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-2 rounded shadow-lg shadow-green-900/30 transition flex items-center justify-center gap-2 text-xs border border-green-400/30">
+                        <i class="fa-solid fa-ruler"></i> Record Observation
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table & Analysis Section -->
+            <div class="w-full md:w-1/2 lg:w-3/5 flex flex-col">
+                <!-- Tabs -->
+                <div class="bg-lab-element flex border-b border-lab-border shrink-0">
+                    <button class="px-4 py-2 text-xs font-bold border-b-2 border-lab-accent text-white" id="tab-table">Observation Log</button>
+                    <button class="px-4 py-2 text-xs font-bold border-b-2 border-transparent text-slate-400 hover:text-white transition" id="tab-analysis" onclick="alert('Analysis view enabled in full version. Using Table view.')">Analysis (Graph)</button>
+                    <div class="flex-1"></div>
+                    <button onclick="clearTable()" class="px-3 py-2 text-[10px] text-red-400 hover:bg-red-950/30 transition uppercase font-bold flex items-center gap-1">
+                        <i class="fa-solid fa-trash-can"></i> Clear
+                    </button>
+                </div>
+                
+                <!-- Table View -->
+                <div class="flex-1 overflow-auto bg-lab-panel relative">
+                    <table class="w-full text-[11px] text-left border-collapse">
+                        <thead class="text-slate-400 bg-lab-element sticky top-0 z-10 shadow-md">
+                            <tr>
+                                <th class="px-3 py-2 font-semibold">#</th>
+                                <th class="px-3 py-2 font-semibold">RPM</th>
+                                <th class="px-3 py-2 font-semibold">L (m)</th>
+                                <th class="px-3 py-2 font-semibold">Δx (mm)</th>
+                                <th class="px-3 py-2 font-semibold">Calc c (m/s)</th>
+                                <th class="px-3 py-2 font-semibold">Error (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="obs-table-body" class="divide-y divide-lab-border font-mono text-slate-300">
+                            <!-- Data injected here -->
+                        </tbody>
+                    </table>
+                    <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-4 text-center">
+                        <i class="fa-solid fa-clipboard-list text-3xl mb-2 opacity-50"></i>
+                        <p class="text-xs">No observations recorded.<br>Adjust parameters, align crosshair, and record.</p>
+                    </div>
+                </div>
+                
+                <!-- Result Summary footer -->
+                <div class="bg-lab-element px-4 py-2 border-t border-lab-border flex justify-between items-center shrink-0">
+                    <span class="text-xs text-slate-400 font-semibold">Mean Experimental c:</span>
+                    <span class="text-sm font-bold font-mono text-highlight" id="mean-c-display">---</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- PHYSICS CONSTANTS & STATE ---
+        const PHYSICS = {
+            c_true: 299792458, // m/s
+        };
+
+        const state = {
+            rpm: 30000,
+            L: 15.0, // m
+            D: 5.0,  // m
+            lambda: 0x22c55e, // hex color
+            noiseEnabled: true,
+            
+            // Computed theoretical
+            omega: 0,
+            t: 0,
+            dTheta: 0,
+            actual_dx: 0, // meters
+            
+            // Simulated physical output
+            displayed_dx: 0, // meters (includes noise)
+            
+            // User UI state
+            micrometerPos_mm: 0,
+            calculated_c: 0,
+            
+            trials: [],
+            trialCount: 0,
+            mean_c: 0
+        };
+
+        // DOM Elements Map
+        const DOM = {
+            rpmIn: document.getElementById('param-rpm'),
+            rpmVal: document.getElementById('rpm-val'),
+            lIn: document.getElementById('param-L'),
+            lVal: document.getElementById('L-val'),
+            dIn: document.getElementById('param-D'),
+            dVal: document.getElementById('D-val'),
+            noiseIn: document.getElementById('param-noise'),
+            
+            microSlider: document.getElementById('micrometer-slider'),
+            microInput: document.getElementById('micro-num-input'),
+            
+            liveOmega: document.getElementById('live-omega'),
+            liveTime: document.getElementById('live-time'),
+            liveDtheta: document.getElementById('live-dtheta'),
+            liveDx: document.getElementById('live-dx'),
+            
+            tableBody: document.getElementById('obs-table-body'),
+            emptyState: document.getElementById('empty-state'),
+            meanCDisplay: document.getElementById('mean-c-display')
+        };
+
+        // Formatters
+        const fSci = (n, d=3) => (n).toExponential(d).replace('e+', ' × 10^');
+        const fNum = (n) => n.toLocaleString('en-US');
+
+        // --- PHYSICS CALCULATIONS ---
+        function computePhysics() {
+            // Read inputs
+            state.rpm = parseInt(DOM.rpmIn.value);
+            state.L = parseFloat(DOM.lIn.value);
+            state.D = parseFloat(DOM.dIn.value);
+            state.noiseEnabled = DOM.noiseIn.checked;
+
+            // Theoretical equations
+            state.omega = (2 * Math.PI * state.rpm) / 60; // rad/s
+            state.t = (2 * state.L) / PHYSICS.c_true; // sec
+            state.dTheta = state.omega * state.t; // rad
+            
+            // Shift formula: dx = D * tan(2 * dTheta) ≈ 2 * D * dTheta
+            // Substitute: 2 * D * (omega * 2L/c) = 4 * D * L * omega / c
+            state.actual_dx = (4 * state.D * state.L * state.omega) / PHYSICS.c_true; 
+
+            // Add synthetic experimental noise
+            if (state.noiseEnabled && state.rpm > 0) {
+                // Base error + proportional error (turbulence, backlash simulation)
+                const baseNoise = 0.000005; // 5 microns base
+                const propNoise = state.actual_dx * 0.02; // 2% 
+                // Random walk noise
+                const randomFactor = (Math.sin(Date.now() * 0.005) * 0.5 + (Math.random() - 0.5)) * 0.5;
+                state.displayed_dx = state.actual_dx + (randomFactor * 2 * (baseNoise + propNoise));
+            } else {
+                state.displayed_dx = state.actual_dx;
+            }
+
+            // Adjust slider bounds dynamically based on max possible shift to keep UI usable
+            const maxTheoreticalDx_mm = (4 * 15 * 50 * (2 * Math.PI * 50000 / 60) / PHYSICS.c_true) * 1000;
+            const currentBounds = Math.max(10, Math.ceil(state.actual_dx * 1000 * 2)); // at least 10mm or double the actual
+            DOM.microSlider.min = -currentBounds;
+            DOM.microSlider.max = currentBounds;
+
+            updateLivePanel();
+            updateMicrometerView();
+            update3DScene();
+        }
+
+        // Calculate 'c' based on user's micrometer position
+        function updateCalculatedC() {
+            state.micrometerPos_mm = parseFloat(DOM.microInput.value) || parseFloat(DOM.microSlider.value);
+            
+            // Sync slider and input
+            if(document.activeElement !== DOM.microInput) {
+                DOM.microInput.value = state.micrometerPos_mm.toFixed(3);
+            }
+            if(document.activeElement !== DOM.microSlider) {
+                DOM.microSlider.value = state.micrometerPos_mm;
+            }
+
+            if (Math.abs(state.micrometerPos_mm) > 0.0005 && state.rpm > 0) {
+                const dx_m = state.micrometerPos_mm / 1000;
+                // Inverse formula: c = 4 * D * L * w / dx
+                state.calculated_c = Math.abs((4 * state.D * state.L * state.omega) / dx_m);
+            } else {
+                state.calculated_c = 0;
+            }
+            
+            updateMicrometerView(); // Redraw crosshair
+        }
+
+        function updateLivePanel() {
+            DOM.rpmVal.innerText = fNum(state.rpm) + ' RPM';
+            DOM.lVal.innerText = state.L.toFixed(1) + ' m';
+            DOM.dVal.innerText = state.D.toFixed(1) + ' m';
+            
+            DOM.liveOmega.innerText = fNum(Math.round(state.omega)) + ' rad/s';
+            DOM.liveTime.innerText = (state.t * 1e9).toFixed(1) + ' ns';
+            DOM.liveDtheta.innerText = fSci(state.dTheta, 2) + ' rad';
+            DOM.liveDx.innerText = (state.actual_dx * 1000).toFixed(4) + ' mm';
+            
+            updateCalculatedC();
+        }
+
+        function adjustMicrometer(delta) {
+            let val = parseFloat(DOM.microInput.value) + delta;
+            DOM.microInput.value = val.toFixed(3);
+            updateCalculatedC();
+        }
+
+        function setLaserColor(hex, btn) {
+            state.lambda = hex;
+            // Update button styles
+            document.querySelectorAll('.laser-btn').forEach(b => {
+                b.classList.remove('border-white');
+                b.classList.add('border-transparent');
+            });
+            btn.classList.remove('border-transparent');
+            btn.classList.add('border-white');
+            
+            updateMicrometerView();
+            update3DScene();
+        }
+
+        // --- MICROMETER 2D RENDERING ---
+        const mCanvas = document.getElementById('micrometer-canvas');
+        const mCtx = mCanvas.getContext('2d', { alpha: false });
+        let mWidth, mHeight;
+
+        function resizeMicrometer() {
+            const container = document.getElementById('micrometer-container');
+            if(!container) return;
+            mWidth = container.clientWidth;
+            mHeight = container.clientHeight;
+            // Handle high DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            mCanvas.width = mWidth * dpr;
+            mCanvas.height = mHeight * dpr;
+            mCtx.scale(dpr, dpr);
+            mCanvas.style.width = mWidth + 'px';
+            mCanvas.style.height = mHeight + 'px';
+            updateMicrometerView();
+        }
+
+        function drawLaserSpot(x, y, radius, intensity, colorHex) {
+            const r = (colorHex >> 16) & 255;
+            const g = (colorHex >> 8) & 255;
+            const b = colorHex & 255;
+
+            const grad = mCtx.createRadialGradient(x, y, 0, x, y, radius);
+            grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${intensity})`);
+            grad.addColorStop(0.2, `rgba(${r}, ${g}, ${b}, ${intensity * 0.8})`);
+            grad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${intensity * 0.3})`);
+            grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+            mCtx.fillStyle = grad;
+            mCtx.beginPath();
+            mCtx.arc(x, y, radius, 0, Math.PI * 2);
+            mCtx.fill();
+        }
+
+        function updateMicrometerView() {
+            if(!mCtx || !mWidth) return;
+            
+            // Clear background
+            mCtx.fillStyle = '#0a0a0a';
+            mCtx.fillRect(0, 0, mWidth, mHeight);
+            
+            const centerX = mWidth / 2;
+            const centerY = mHeight / 2;
+            
+            // Draw Reticle Grid
+            mCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+            mCtx.lineWidth = 1;
+            mCtx.beginPath();
+            for(let i = centerX % 20; i < mWidth; i += 20) { mCtx.moveTo(i, 0); mCtx.lineTo(i, mHeight); }
+            for(let i = centerY % 20; i < mHeight; i += 20) { mCtx.moveTo(0, i); mCtx.lineTo(mWidth, i); }
+            mCtx.stroke();
+
+            // Draw center reference axis (Zero line)
+            mCtx.strokeStyle = 'rgba(255,255,255,0.2)';
+            mCtx.setLineDash([5, 5]);
+            mCtx.beginPath();
+            mCtx.moveTo(centerX, 0); mCtx.lineTo(centerX, mHeight);
+            mCtx.stroke();
+            mCtx.setLineDash([]);
+            mCtx.fillStyle = 'rgba(255,255,255,0.4)';
+            mCtx.font = '10px monospace';
+            mCtx.fillText('0.0', centerX + 5, mHeight - 10);
+
+            // Scale: Width represents the slider max range. 
+            // So pixel per mm = (mWidth / 2) / slider.max
+            const bounds_mm = parseFloat(DOM.microSlider.max);
+            const px_per_mm = (mWidth / 2) / bounds_mm;
+
+            // Spot 1: Theoretical unshifted beam (ghostly)
+            drawLaserSpot(centerX, centerY, 12, 0.2, state.lambda);
+
+            // Spot 2: Shifted beam (Real measurement target)
+            const shift_mm = state.displayed_dx * 1000;
+            const spotX = centerX + (shift_mm * px_per_mm);
+            // Spot gets slightly larger/fuzzier with distance L
+            const blurRadius = 12 + (state.L * 0.15);
+            drawLaserSpot(spotX, centerY, blurRadius, 0.9, state.lambda);
+            
+            // Draw bright core
+            drawLaserSpot(spotX, centerY, blurRadius*0.3, 1.0, 0xffffff);
+
+            // Draw Micrometer Measurement Crosshair
+            const crosshairX = centerX + (state.micrometerPos_mm * px_per_mm);
+            mCtx.strokeStyle = '#ef4444'; // Red
+            mCtx.lineWidth = 1.5;
+            
+            mCtx.beginPath();
+            mCtx.moveTo(crosshairX, 0); mCtx.lineTo(crosshairX, mHeight);
+            mCtx.stroke();
+            
+            // Crosshair horizontal tick
+            mCtx.beginPath();
+            mCtx.moveTo(crosshairX - 15, centerY); mCtx.lineTo(crosshairX + 15, centerY);
+            mCtx.stroke();
+            
+            // Label
+            mCtx.fillStyle = '#ef4444';
+            mCtx.fillText(state.micrometerPos_mm.toFixed(3) + ' mm', crosshairX + 5, centerY - 15);
+        }
+
+        // --- THREE.JS 3D SCENE ---
+        let scene, camera, renderer, controls;
+        let mirrorR, mirrorM, screen, laserSource, bsNode;
+        let rayLines = [], laserMat;
+        let is3DInit = false;
+
+        function init3D() {
+            const container = document.getElementById('canvas3d');
+            if(!container) return;
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color('#020617'); // slate-950
+
+            camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(-8, 6, 12);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // optimize performance
+            // renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 0, 0);
+            controls.maxPolarAngle = Math.PI / 2 + 0.1; // Don't go too far below table
+
+            // Lighting
+            scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+            const pLight = new THREE.PointLight(0xffffff, 1.2, 50);
+            pLight.position.set(0, 10, 5);
+            scene.add(pLight);
+            
+            const pLight2 = new THREE.PointLight(0x38bdf8, 0.5, 30);
+            pLight2.position.set(-5, 2, -5);
+            scene.add(pLight2);
+
+            buildLabAssets();
+            is3DInit = true;
+            
+            window.addEventListener('resize', onWindowResize);
+            animate3D();
+        }
+
+        function createOpticMount(color = 0x1e293b) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.3, metalness: 0.7 });
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.2, 16), mat);
+            const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.2, 16), mat);
+            rod.position.y = 0.6;
+            group.add(base);
+            group.add(rod);
+            group.position.y = -0.1;
+            return group;
+        }
+
+        function buildLabAssets() {
+            // Optical Table (Breadboard)
+            const tableGeo = new THREE.BoxGeometry(25, 0.2, 12);
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+            const table = new THREE.Mesh(tableGeo, tableMat);
+            table.position.y = -0.2;
+            scene.add(table);
+            
+            // Grid texture simulation
+            const grid = new THREE.GridHelper(25, 50, 0x334155, 0x1e293b);
+            grid.position.y = -0.09;
+            scene.add(grid);
+
+            // Optical Axis Height
+            const h = 1.2;
+
+            // 1. Laser Source
+            const laserMount = createOpticMount(0x000000);
+            laserMount.position.set(-6, 0, 0);
+            const laserBox = new THREE.Mesh(
+                new THREE.BoxGeometry(1.5, 0.5, 0.5), 
+                new THREE.MeshStandardMaterial({color: 0x111111, metalness: 0.8, roughness: 0.2})
+            );
+            laserBox.position.y = h;
+            laserMount.add(laserBox);
+            // Glowing emission tip
+            const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({color:0xffffff}));
+            tip.rotation.z = Math.PI/2;
+            tip.position.set(0.8, h, 0);
+            laserMount.add(tip);
+            scene.add(laserMount);
+
+            // 2. Beam Splitter
+            const bsMount = createOpticMount();
+            bsMount.position.set(-2, 0, 0);
+            const bsGlass = new THREE.Mesh(
+                new THREE.BoxGeometry(0.05, 0.8, 0.8),
+                new THREE.MeshPhysicalMaterial({ color: 0xaaaaaa, transmission: 0.9, opacity: 1, transparent: true, roughness: 0, side: THREE.DoubleSide })
+            );
+            bsGlass.position.y = h;
+            bsGlass.rotation.y = Math.PI / 4; // 45 deg
+            bsMount.add(bsGlass);
+            scene.add(bsMount);
+
+            // 3. Rotating Mirror (Origin)
+            const rmMount = createOpticMount(0x334155);
+            rmMount.position.set(0, 0, 0);
+            
+            mirrorR = new THREE.Group();
+            mirrorR.position.y = h;
+            // Octagonal Mirror
+            const octoGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8);
+            const mirrorMat = new THREE.MeshStandardMaterial({color: 0xffffff, metalness: 1, roughness: 0});
+            const octo = new THREE.Mesh(octoGeo, mirrorMat);
+            mirrorR.add(octo);
+            rmMount.add(mirrorR);
+            scene.add(rmMount);
+
+            // 4. Fixed Mirror
+            mirrorM = createOpticMount();
+            // Position set dynamically
+            const fmMirror = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.6, 0.6, 0.1, 32),
+                new THREE.MeshStandardMaterial({color: 0xffffff, metalness: 1, roughness: 0})
+            );
+            fmMirror.rotation.z = Math.PI/2;
+            fmMirror.rotation.y = Math.PI/2;
+            fmMirror.position.y = h;
+            mirrorM.add(fmMirror);
+            scene.add(mirrorM);
+
+            // 5. Screen / Eyepiece
+            const screenMount = createOpticMount();
+            screenMount.position.set(-2, 0, 3); // Z offset represents D visually
+            const screenBoard = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 1, 0.1),
+                new THREE.MeshStandardMaterial({color: 0xe2e8f0, roughness: 0.8})
+            );
+            screenBoard.position.y = h;
+            screenMount.add(screenBoard);
+            scene.add(screenMount);
+
+            // Ray Material
+            laserMat = new THREE.LineBasicMaterial({
+                color: state.lambda,
+                linewidth: 2, // Note: WebGL standard limits line width to 1, but we use it anyway
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+
+            update3DScene();
+        }
+
+        function drawRay(p1, p2) {
+            const geo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+            const line = new THREE.Line(geo, laserMat);
+            scene.add(line);
+            rayLines.push(line);
+        }
+
+        function update3DScene() {
+            if(!is3DInit) return;
+
+            // Clear old rays
+            rayLines.forEach(l => scene.remove(l));
+            rayLines = [];
+
+            laserMat.color.setHex(state.lambda);
+
+            const h = 1.2; // Optical axis height
+            // Compress L and D scales for visual fit in the table bounds
+            // L is 2-50m. We map it to 2 - 12 units on X axis
+            const visualL = 2 + (state.L / 50) * 10; 
+            // D is 1-15m. Map to 1.5 - 5 units on Z axis
+            const visualD = 1.5 + (state.D / 15) * 3.5;
+
+            mirrorM.position.x = visualL;
+            
+            // Find Screen object and position it based on D
+            scene.children.forEach(c => {
+                // identify screen mount by roughly its Z position > 0 and X = -2
+                if(c.position.x === -2 && c.position.z >= 1.5) {
+                    c.position.z = visualD;
+                }
+            });
+
+            // Physics points (Visual coordinates)
+            const pLaser = new THREE.Vector3(-5.2, h, 0); // Tip of laser
+            const pBS = new THREE.Vector3(-2, h, 0);
+            const pR = new THREE.Vector3(0, h, 0);
+            const pM = new THREE.Vector3(visualL, h, 0);
+            
+            // Forward Path
+            drawRay(pLaser, pBS);
+            drawRay(pBS, pR);
+            drawRay(pR, pM);
+            drawRay(pM, pR);
+
+            // Return Path
+            // The angle is 2*dTheta. Since it's ~10^-4, we exaggerate it JUST enough
+            // to see it hit the screen at a slightly different spot.
+            // Let's amplify it to max 0.2 radians for visualization purposes.
+            // Map actual_dx to a visual shift (max 0.4 units)
+            let visualShift = (state.actual_dx * 1000) * 0.05; // 10mm shift -> 0.5 units visual shift
+            // Limit visual shift to stay on screen
+            visualShift = Math.min(visualShift, 0.4);
+
+            // Vector from R to BS plane
+            // R is (0, h, 0), normal return is along -X axis.
+            // Deflected return will have a Z component.
+            // It travels distance 2 to hit X=-2 plane (BS plane).
+            const zAtBS = (visualShift / visualD) * 2; // Proportion based on similar triangles
+            const pReturnBS = new THREE.Vector3(-2, h, zAtBS);
+            
+            drawRay(pR, pReturnBS);
+
+            // Reflection at BS towards screen (Z direction)
+            // It hits BS at (-2, h, zAtBS). Screen is at Z = visualD.
+            // Reflected ray goes from (-2, h, zAtBS) to (-2 - visualShift, h, visualD)
+            const pScreenHit = new THREE.Vector3(-2 - visualShift, h, visualD);
+            drawRay(pReturnBS, pScreenHit);
+        }
+
+        let lastTime = 0;
+        function animate3D(time) {
+            requestAnimationFrame(animate3D);
+            if(!is3DInit) return;
+            
+            const dt = (time - lastTime) / 1000 || 0;
+            lastTime = time;
+
+            controls.update();
+
+            // Rotate mirror visually based on RPM
+            if(state.rpm > 0) {
+                // Cap visual rotation speed to look good (e.g. max 15 rad/s visually)
+                const visSpeed = Math.min((state.rpm / 60) * Math.PI * 2, 15);
+                mirrorR.rotation.y += visSpeed * dt;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function resetCamera() {
+            camera.position.set(-8, 6, 12);
+            controls.target.set(0, 0, 0);
+        }
+
+        function onWindowResize() {
+            if(camera && renderer) {
+                const container = document.getElementById('canvas3d');
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+            }
+            resizeMicrometer();
+        }
+
+        // --- DATA LOGGING & EXPORT ---
+        
+        function recordMeasurement() {
+            if(state.rpm === 0) {
+                alert("Please increase RPM to measure a displacement.");
+                return;
+            }
+            if(state.micrometerPos_mm === 0) {
+                 if(!confirm("Recorded displacement is 0.000 mm. This will result in an infinite calculated speed. Proceed?")) return;
+            }
+
+            state.trialCount++;
+            
+            let err = 0;
+            if (state.calculated_c > 0) {
+                err = Math.abs((state.calculated_c - PHYSICS.c_true) / PHYSICS.c_true) * 100;
+            }
+
+            const trial = {
+                id: state.trialCount,
+                rpm: state.rpm,
+                L: state.L,
+                dx: state.micrometerPos_mm,
+                c: state.calculated_c,
+                err: err
+            };
+
+            state.trials.push(trial);
+            
+            // Calculate mean c
+            const validTrials = state.trials.filter(t => t.c > 0 && isFinite(t.c));
+            if(validTrials.length > 0) {
+                state.mean_c = validTrials.reduce((sum, t) => sum + t.c, 0) / validTrials.length;
+                DOM.meanCDisplay.innerText = fSci(state.mean_c, 4) + ' m/s';
+                
+                // Colorize mean based on error
+                const meanErr = Math.abs((state.mean_c - PHYSICS.c_true)/PHYSICS.c_true) * 100;
+                DOM.meanCDisplay.className = `text-sm font-bold font-mono ${meanErr < 5 ? 'text-green-400' : meanErr < 15 ? 'text-yellow-400' : 'text-red-400'}`;
+            }
+
+            renderTable();
+        }
+
+        function renderTable() {
+            if(state.trials.length === 0) {
+                DOM.emptyState.style.display = 'flex';
+                DOM.tableBody.innerHTML = '';
+                return;
+            }
+            
+            DOM.emptyState.style.display = 'none';
+            DOM.tableBody.innerHTML = '';
+            
+            // Render in reverse order (newest first)
+            [...state.trials].reverse().forEach(t => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-800/50 transition border-b border-lab-border/50";
+                
+                let errColor = "text-slate-300";
+                if(t.c > 0 && isFinite(t.c)) {
+                    if(t.err < 2) errColor = "text-green-400";
+                    else if(t.err < 10) errColor = "text-yellow-400";
+                    else errColor = "text-red-400";
+                }
+
+                tr.innerHTML = `
+                    <td class="px-3 py-2 text-slate-400">${t.id}</td>
+                    <td class="px-3 py-2 text-slate-200">${fNum(t.rpm)}</td>
+                    <td class="px-3 py-2">${t.L.toFixed(1)}</td>
+                    <td class="px-3 py-2 text-lab-accent">${t.dx.toFixed(3)}</td>
+                    <td class="px-3 py-2 ${errColor}">${t.c > 0 && isFinite(t.c) ? fSci(t.c, 3) : '---'}</td>
+                    <td class="px-3 py-2 ${errColor}">${t.c > 0 && isFinite(t.c) ? t.err.toFixed(2)+'%' : '---'}</td>
+                `;
+                DOM.tableBody.appendChild(tr);
+            });
+        }
+
+        function clearTable() {
+            state.trials = [];
+            state.trialCount = 0;
+            state.mean_c = 0;
+            DOM.meanCDisplay.innerText = '---';
+            DOM.meanCDisplay.className = 'text-sm font-bold font-mono text-highlight';
+            renderTable();
+        }
+
+        // Lab Report Generation
+        function generateReport() {
+            if(state.trials.length === 0) {
+                alert("Please record at least one measurement to generate a report.");
+                return;
+            }
+
+            let html = `
+                <!DOCTYPE html>
+                <html><head><title>Lab Report: Speed of Light</title>
+                <style>
+                    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #111; line-height: 1.6; max-width: 800px; margin: 0 auto; }
+                    h1 { border-bottom: 3px solid #2563eb; padding-bottom: 10px; color: #1e3a8a; margin-bottom: 5px;}
+                    h2 { color: #1d4ed8; margin-top: 30px; border-bottom: 1px solid #cbd5e1; padding-bottom: 5px; }
+                    .meta { color: #64748b; font-size: 0.9em; margin-bottom: 30px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.95em; }
+                    th, td { border: 1px solid #94a3b8; padding: 10px; text-align: left; }
+                    th { background-color: #f1f5f9; color: #334155; font-weight: 600; }
+                    .math { background: #f8fafc; padding: 15px; border-radius: 6px; font-family: 'Courier New', Courier, monospace; border-left: 4px solid #3b82f6; margin: 15px 0;}
+                    .result-box { background: #eff6ff; padding: 20px; border-radius: 8px; margin-top: 30px; border: 1px solid #bfdbfe; }
+                    .result-box strong { color: #1e40af; }
+                </style>
+                </head><body>
+                <h1>Experiment: Speed of Light</h1>
+                <div class="meta"><strong>Method:</strong> Foucault's Rotating Mirror | <strong>Date Generated:</strong> ${new Date().toLocaleString()}</div>
+                
+                <h2>1. Objective</h2>
+                <p>To determine the speed of light in a vacuum utilizing Foucault's rotating mirror apparatus by measuring the image displacement caused by the finite transit time of light.</p>
+                
+                <h2>2. Theory & Equations</h2>
+                <p>Light emitted from a source is reflected by a rotating mirror to a distant fixed mirror at distance <em>L</em>. During the round trip time <em>t = 2L/c</em>, the rotating mirror turns by an angle <em>&Delta;&theta; = &omega;t</em>. The returning beam is deflected by <em>2&Delta;&theta;</em>, resulting in a displacement <em>&Delta;x</em> on a screen at distance <em>D</em>.</p>
+                <div class="math">
+                    c = 4 &middot; D &middot; L &middot; &omega; / &Delta;x
+                </div>
+
+                <h2>3. Observation Data</h2>
+                <table>
+                    <thead>
+                        <tr><th>Trial</th><th>RPM</th><th>L (m)</th><th>D (m)</th><th>&Delta;x (mm)</th><th>Calculated c (m/s)</th><th>Error (%)</th></tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            let validTrials = 0;
+            state.trials.forEach(t => {
+                html += `<tr>
+                    <td>${t.id}</td><td>${t.rpm}</td><td>${t.L}</td><td>${state.D}</td><td>${t.dx.toFixed(3)}</td>
+                    <td>${t.c > 0 && isFinite(t.c) ? t.c.toExponential(4) : 'N/A'}</td>
+                    <td>${t.c > 0 && isFinite(t.c) ? t.err.toFixed(2) : 'N/A'}</td>
+                </tr>`;
+                if(t.c > 0 && isFinite(t.c)) validTrials++;
+            });
+
+            const overallError = validTrials > 0 ? Math.abs((state.mean_c - PHYSICS.c_true)/PHYSICS.c_true)*100 : 0;
+
+            html += `
+                    </tbody>
+                </table>
+                
+                <div class="result-box">
+                    <h2>4. Final Results</h2>
+                    <p><strong>Accepted Speed of Light:</strong> 299,792,458 m/s</p>
+                    <p><strong>Mean Experimental Speed of Light:</strong> ${state.mean_c > 0 ? state.mean_c.toExponential(5) : 'N/A'} m/s</p>
+                    <p><strong>Overall Percentage Error:</strong> ${overallError.toFixed(3)}%</p>
+                    <p><em>Note: Simulated environmental noise and micrometer measurement uncertainties contributed to the observed percentage error.</em></p>
+                </div>
+                </body></html>
+            `;
+
+            const printWin = window.open('', '_blank');
+            printWin.document.write(html);
+            printWin.document.close();
+            setTimeout(() => { printWin.print(); }, 500);
+        }
+
+        // --- EVENT BINDINGS ---
+        [DOM.rpmIn, DOM.lIn, DOM.dIn, DOM.noiseIn].forEach(el => {
+            el.addEventListener('input', computePhysics);
+        });
+
+        // Micrometer interaction syncing
+        DOM.microSlider.addEventListener('input', () => {
+            DOM.microInput.value = parseFloat(DOM.microSlider.value).toFixed(3);
+            updateCalculatedC();
+        });
+        
+        DOM.microInput.addEventListener('input', () => {
+            let val = parseFloat(DOM.microInput.value);
+            if(!isNaN(val)) {
+                DOM.microSlider.value = val;
+                updateCalculatedC();
+            }
+        });
+
+        // Loop continuous animation for real-time noise updates
+        setInterval(() => {
+            if(state.noiseEnabled && state.rpm > 0) {
+                // Recompute just the noise part slightly to make spot shimmer
+                computePhysics(); 
+            }
+        }, 100);
+
+        // INITIALIZE
+        window.onload = () => {
+            init3D();
+            resizeMicrometer();
+            computePhysics();
+            
+            // Set slight initial offset for realism so user has to adjust
+            DOM.microSlider.value = -0.5;
+            DOM.microInput.value = "-0.500";
+            updateCalculatedC();
+        };
+
+    </script>
+</body>
+</html>

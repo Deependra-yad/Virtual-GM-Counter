@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Lagrangian Pendulum Simulator</title>
+
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: { 850: '#1f2937', 900: '#111827', 950: '#030712' }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Three.js for 3D Rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Chart.js for graphing -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- KaTeX for beautiful math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap');
+
+        body {
+            background-color: #030712;
+            color: #f3f4f6;
+            margin: 0;
+            overflow: hidden; /* Prevent body scroll, handle scroll in panels */
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+        /* Range slider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 14px;
+            width: 14px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -5px;
+            box-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #374151;
+            border-radius: 2px;
+        }
+
+        /* Energy Bars */
+        .energy-bar-container {
+            width: 100%;
+            height: 8px;
+            background-color: #374151;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+        .energy-bar { height: 100%; width: 0%; transition: width 0.1s linear; }
+        #pe-bar { background-color: #3b82f6; } 
+        #ke-bar { background-color: #ef4444; } 
+        #te-bar { background-color: #10b981; } 
+
+        .math-font { font-family: 'Fira Code', monospace; }
+        
+        /* Table styling */
+        th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #374151; white-space: nowrap;}
+        th { font-weight: 600; color: #9ca3af; background: #111827; position: sticky; top: 0; z-index: 10;}
+        
+        /* Utility */
+        .hide-scroll { scrollbar-width: none; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+
+<body class="flex flex-col h-screen w-screen text-sm">
+
+    <!-- Header Navigation -->
+    <header class="h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-4 shrink-0 z-20 shadow-md">
+        <div class="flex items-center gap-3">
+            <div class="bg-blue-600 p-1.5 rounded-lg">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+            </div>
+            <h1 class="font-semibold text-gray-100 hidden sm:block">Lagrangian Mechanics: Simple Pendulum</h1>
+        </div>
+        <div class="flex gap-2">
+            <button id="btn-start" class="bg-green-600 hover:bg-green-500 text-white px-4 py-1.5 rounded-md font-medium transition-colors shadow-sm flex items-center gap-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                <span>Start</span>
+            </button>
+            <button id="btn-reset" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-1.5 rounded-md font-medium transition-colors shadow-sm flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <span>Reset</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-grow flex flex-col md:flex-row overflow-hidden">
+        
+        <!-- Left Sidebar: Controls -->
+        <aside class="w-full md:w-80 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0 h-[40vh] md:h-auto overflow-y-auto z-10 shadow-xl">
+            
+            <div class="p-4 space-y-6 flex-grow">
+                
+                <!-- System Properties -->
+                <div>
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">System Properties</h3>
+                    
+                    <div class="mb-4">
+                        <div class="flex justify-between text-xs mb-1"><label>Length ($L$)</label><span id="val-length" class="math-font text-blue-400">1.00 m</span></div>
+                        <input type="range" id="slider-length" min="0.1" max="5.0" step="0.01" value="1.0">
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="flex justify-between text-xs mb-1"><label>Bob Mass ($m$)</label><span id="val-mass" class="math-font text-blue-400">1.00 kg</span></div>
+                        <input type="range" id="slider-mass" min="0.01" max="5.0" step="0.01" value="1.0">
+                    </div>
+
+                    <div class="mb-2">
+                        <div class="flex justify-between text-xs mb-1"><label>Initial Angle ($\theta_0$)</label><span id="val-angle" class="math-font text-blue-400">45°</span></div>
+                        <input type="range" id="slider-angle" min="-170" max="170" step="1" value="45">
+                    </div>
+                </div>
+
+                <div class="h-px bg-gray-800 w-full"></div>
+
+                <!-- Environment -->
+                <div>
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Environment</h3>
+                    
+                    <div class="mb-4">
+                        <label class="block text-xs mb-1">Gravity ($g$)</label>
+                        <select id="select-gravity" class="w-full bg-gray-950 border border-gray-700 rounded p-1.5 text-xs outline-none focus:border-blue-500 text-gray-200">
+                            <option value="9.80665">Earth (9.81 m/s²)</option>
+                            <option value="1.62">Moon (1.62 m/s²)</option>
+                            <option value="3.721">Mars (3.72 m/s²)</option>
+                            <option value="24.79">Jupiter (24.79 m/s²)</option>
+                            <option value="0">Zero-G (0 m/s²)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <div class="flex justify-between text-xs mb-1"><label>Air/Pivot Damping ($c$)</label><span id="val-damping" class="math-font text-blue-400">0.00</span></div>
+                        <input type="range" id="slider-damping" min="0" max="1" step="0.01" value="0">
+                    </div>
+                </div>
+
+                <div class="h-px bg-gray-800 w-full"></div>
+
+                <!-- Settings & Math -->
+                <div>
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Simulation settings</h3>
+                    
+                    <label class="flex items-center space-x-2 cursor-pointer mb-2">
+                        <input type="checkbox" id="check-small-angle" class="w-3.5 h-3.5 rounded bg-gray-950 border-gray-700 text-blue-600 focus:ring-blue-500">
+                        <span class="text-xs text-gray-300">Small Angle Approx. ($\sin\theta \approx \theta$)</span>
+                    </label>
+                    
+                    <label class="flex items-center space-x-2 cursor-pointer mb-4">
+                        <input type="checkbox" id="check-fbd" checked class="w-3.5 h-3.5 rounded bg-gray-950 border-gray-700 text-blue-600 focus:ring-blue-500">
+                        <span class="text-xs text-gray-300">Show Free Body Vectors</span>
+                    </label>
+
+                    <div class="mb-4">
+                        <div class="flex justify-between text-xs mb-1"><label>Time Scale</label><span id="val-timescale" class="text-blue-400">1.0x</span></div>
+                        <input type="range" id="slider-timescale" min="0.1" max="5.0" step="0.1" value="1.0">
+                    </div>
+
+                    <!-- Lagrangian Equation Display -->
+                    <div class="bg-gray-950 p-3 rounded-lg border border-gray-800 mt-4">
+                        <h4 class="text-[10px] text-gray-500 uppercase mb-1">Equation of Motion</h4>
+                        <div id="math-eom" class="text-xs text-center text-gray-300 overflow-x-auto hide-scroll pb-1">
+                            $\ddot{\theta} + \frac{g}{L}\sin\theta = 0$
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Center/Right Area: Canvas & Data -->
+        <div class="flex-grow flex flex-col min-w-0 bg-black relative">
+            
+            <!-- TOP: Dedicated 3D Canvas -->
+            <div id="canvas-wrapper" class="flex-grow relative overflow-hidden bg-gray-950">
+                <!-- Three.js renderer attaches here -->
+                <div id="canvas-container" class="absolute inset-0 w-full h-full"></div>
+
+                <!-- Floating Live Telemetry Panel -->
+                <div class="absolute top-4 right-4 w-64 bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-lg p-3 shadow-2xl pointer-events-none z-10 hidden sm:block">
+                    <h2 class="text-xs font-bold text-gray-300 border-b border-gray-700 pb-1 mb-2 uppercase tracking-wide">Live Kinematics</h2>
+                    <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] math-font">
+                        <div class="text-gray-400">Time $t$</div><div id="live-t" class="text-right text-gray-100">0.00 s</div>
+                        <div class="text-gray-400">Angle $\theta$</div><div id="live-theta" class="text-right text-gray-100">0.00°</div>
+                        <div class="text-gray-400">Velocity $\dot{\theta}$</div><div id="live-omega" class="text-right text-gray-100">0.00 rad/s</div>
+                        <div class="text-gray-400">Accel $\ddot{\theta}$</div><div id="live-alpha" class="text-right text-gray-100">0.00 rad/s²</div>
+                        <div class="text-gray-400">Tension $T$</div><div id="live-tension" class="text-right text-gray-100">0.00 N</div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <div class="text-[10px] flex justify-between mb-0.5"><span class="text-gray-400">PE ($V$)</span><span id="val-pe" class="math-font text-blue-300">0 J</span></div>
+                        <div class="energy-bar-container"><div id="pe-bar" class="energy-bar"></div></div>
+                        
+                        <div class="text-[10px] flex justify-between mb-0.5 mt-1.5"><span class="text-gray-400">KE ($T$)</span><span id="val-ke" class="math-font text-red-300">0 J</span></div>
+                        <div class="energy-bar-container"><div id="ke-bar" class="energy-bar"></div></div>
+                        
+                        <div class="text-[10px] flex justify-between mb-0.5 mt-1.5"><span class="text-gray-400">Total ($E$)</span><span id="val-te" class="math-font text-green-300">0 J</span></div>
+                        <div class="energy-bar-container"><div id="te-bar" class="energy-bar"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOTTOM: Data Tabs (Graphs & Table) -->
+            <div class="h-[40vh] md:h-72 bg-gray-900 border-t border-gray-700 flex flex-col shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)]">
+                <!-- Tabs Header -->
+                <div class="flex items-center bg-gray-950 border-b border-gray-800 px-2 overflow-x-auto hide-scroll">
+                    <button class="tab-btn px-4 py-2.5 text-xs font-medium text-blue-400 border-b-2 border-blue-500 whitespace-nowrap" data-target="tab-graphs">Time Series Graphs</button>
+                    <button class="tab-btn px-4 py-2.5 text-xs font-medium text-gray-400 hover:text-gray-200 border-b-2 border-transparent whitespace-nowrap" data-target="tab-phase">Phase Space</button>
+                    <button class="tab-btn px-4 py-2.5 text-xs font-medium text-gray-400 hover:text-gray-200 border-b-2 border-transparent whitespace-nowrap" data-target="tab-table">Observation Table</button>
+                    
+                    <div class="flex-grow"></div>
+                    <!-- Action Button inside tabs area -->
+                    <button id="btn-record" class="ml-4 text-[11px] bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded text-white transition whitespace-nowrap shadow">Record Reading</button>
+                </div>
+
+                <!-- Tabs Content -->
+                <div class="relative flex-grow p-2 overflow-hidden bg-gray-900">
+                    
+                    <!-- Time Series -->
+                    <div id="tab-graphs" class="tab-content absolute inset-0 p-2 flex flex-col md:flex-row gap-4 h-full">
+                        <div class="w-full md:w-1/2 h-full relative"><canvas id="chart-kinematics"></canvas></div>
+                        <div class="w-full md:w-1/2 h-full relative hidden md:block"><canvas id="chart-energy"></canvas></div>
+                    </div>
+
+                    <!-- Phase Space -->
+                    <div id="tab-phase" class="tab-content absolute inset-0 p-2 hidden justify-center h-full">
+                        <div class="w-full max-w-3xl h-full relative"><canvas id="chart-phase"></canvas></div>
+                    </div>
+
+                    <!-- Table -->
+                    <div id="tab-table" class="tab-content absolute inset-0 hidden overflow-y-auto custom-scrollbar">
+                        <table class="w-full text-[11px] text-left">
+                            <thead>
+                                <tr>
+                                    <th class="pl-4">#</th>
+                                    <th>$L$ (m)</th>
+                                    <th>$m$ (kg)</th>
+                                    <th>$g$ (m/s²)</th>
+                                    <th>$\theta_0$ (deg)</th>
+                                    <th>Meas. $T$ (s)</th>
+                                    <th>Theory $T_0$ (s)</th>
+                                    <th>Max $\dot{\theta}$ (rad/s)</th>
+                                    <th class="pr-4">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body" class="math-font text-gray-300 divide-y divide-gray-800">
+                                <!-- Rows -->
+                            </tbody>
+                        </table>
+                        <div id="table-empty" class="text-center text-gray-500 py-10 text-xs w-full">No readings recorded yet. Click 'Record Reading'.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        /**
+         * Core Application State and Physics Engine (Euler-Lagrange derived)
+         */
+        class SimulationState {
+            constructor() {
+                this.L = 1.0;          
+                this.m = 1.0;          
+                this.g = 9.80665;      
+                this.damping = 0.0;    
+                
+                this.theta0 = Math.PI / 4; 
+                this.omega0 = 0.0;         
+                
+                this.state = [this.theta0, this.omega0];
+                this.time = 0.0;
+                
+                this.stateSmall = [this.theta0, this.omega0];
+                
+                this.isRunning = false;
+                this.timeScale = 1.0;
+                this.dt = 1 / 60; 
+                
+                this.alpha = 0;
+                this.tension = 0;
+                this.PE = 0;
+                this.KE = 0;
+                this.TE = 0;
+                this.maxEnergy = 1; 
+                
+                this.lastCrossings = [];
+                this.measuredPeriod = 0;
+                this.useSmallAngleEq = false; 
+            }
+
+            reset() {
+                this.state = [this.theta0, this.omega0];
+                this.stateSmall = [this.theta0, this.omega0];
+                this.time = 0;
+                this.lastCrossings = [];
+                this.measuredPeriod = 0;
+                this.updateDerivedVariables();
+            }
+
+            derivatives(t, Y, isSmallAngle = false) {
+                const theta = Y[0];
+                const omega = Y[1];
+                const b = this.damping * 2; 
+                let alpha;
+                if (isSmallAngle) {
+                    alpha = -(this.g / this.L) * theta - b * omega;
+                } else {
+                    alpha = -(this.g / this.L) * Math.sin(theta) - b * omega;
+                }
+                return [omega, alpha];
+            }
+
+            rk4Step(dt) {
+                const t = this.time;
+                const Y = this.state;
+                const Y_sm = this.stateSmall;
+
+                const k1 = this.derivatives(t, Y, this.useSmallAngleEq);
+                const k2 = this.derivatives(t + 0.5*dt, [Y[0] + 0.5*dt*k1[0], Y[1] + 0.5*dt*k1[1]], this.useSmallAngleEq);
+                const k3 = this.derivatives(t + 0.5*dt, [Y[0] + 0.5*dt*k2[0], Y[1] + 0.5*dt*k2[1]], this.useSmallAngleEq);
+                const k4 = this.derivatives(t + dt, [Y[0] + dt*k3[0], Y[1] + dt*k3[1]], this.useSmallAngleEq);
+
+                const nextTheta = Y[0] + (dt/6) * (k1[0] + 2*k2[0] + 2*k3[0] + k4[0]);
+                const nextOmega = Y[1] + (dt/6) * (k1[1] + 2*k2[1] + 2*k3[1] + k4[1]);
+                
+                if (this.state[0] * nextTheta < 0) { 
+                    this.lastCrossings.push(this.time);
+                    if (this.lastCrossings.length > 3) this.lastCrossings.shift();
+                    if (this.lastCrossings.length >= 3) {
+                        this.measuredPeriod = this.lastCrossings[2] - this.lastCrossings[0];
+                    }
+                }
+
+                this.state = [nextTheta, nextOmega];
+
+                // Secondary Linear (always small angle for comparison if needed)
+                const ks1 = this.derivatives(t, Y_sm, true);
+                const ks2 = this.derivatives(t + 0.5*dt, [Y_sm[0] + 0.5*dt*ks1[0], Y_sm[1] + 0.5*dt*ks1[1]], true);
+                const ks3 = this.derivatives(t + 0.5*dt, [Y_sm[0] + 0.5*dt*ks2[0], Y_sm[1] + 0.5*dt*ks2[1]], true);
+                const ks4 = this.derivatives(t + dt, [Y_sm[0] + dt*ks3[0], Y_sm[1] + dt*ks3[1]], true);
+
+                this.stateSmall = [
+                    Y_sm[0] + (dt/6) * (ks1[0] + 2*ks2[0] + 2*ks3[0] + ks4[0]),
+                    Y_sm[1] + (dt/6) * (ks1[1] + 2*ks2[1] + 2*ks3[1] + ks4[1])
+                ];
+
+                this.time += dt;
+                this.updateDerivedVariables();
+            }
+
+            updateDerivedVariables() {
+                const theta = this.state[0];
+                const omega = this.state[1];
+                
+                this.alpha = this.derivatives(this.time, this.state, this.useSmallAngleEq)[1];
+                
+                // V = mgL(1 - cos(theta))
+                this.PE = this.m * this.g * this.L * (1 - Math.cos(theta));
+                // T = 1/2 m v^2 = 1/2 m (L*omega)^2
+                this.KE = 0.5 * this.m * Math.pow(this.L * omega, 2);
+                this.TE = this.PE + this.KE;
+                
+                this.maxEnergy = this.m * this.g * this.L * (1 - Math.cos(this.theta0)) + 0.5*this.m*Math.pow(this.L*this.omega0, 2);
+                if (this.maxEnergy < 0.001) this.maxEnergy = 1; 
+
+                // T = mg cos(theta) + m L omega^2
+                this.tension = this.m * this.g * Math.cos(theta) + this.m * this.L * omega * omega;
+            }
+            
+            getTheoreticalPeriod() {
+                if (this.g === 0) return 0;
+                return 2 * Math.PI * Math.sqrt(this.L / this.g);
+            }
+        }
+
+        const sim = new SimulationState();
+
+        /**
+         * 3D Visualization Setup with Responsive Container Resize
+         */
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a); // Darker lab background
+        scene.fog = new THREE.FogExp2(0x0a0a0a, 0.02);
+
+        // Get initial dimensions securely
+        const initialWidth = container.clientWidth || window.innerWidth;
+        const initialHeight = container.clientHeight || (window.innerHeight * 0.6);
+
+        const camera = new THREE.PerspectiveCamera(45, initialWidth / initialHeight, 0.1, 100);
+        // Adjusted camera to properly frame a 5m pendulum
+        camera.position.set(0, -2.5, 10); 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(initialWidth, initialHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, -2.5, 0); // Focus on the middle of the pendulum
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const spotLight = new THREE.SpotLight(0xffffff, 0.9);
+        spotLight.position.set(4, 5, 5);
+        spotLight.castShadow = true;
+        spotLight.shadow.mapSize.width = 1024;
+        spotLight.shadow.mapSize.height = 1024;
+        scene.add(spotLight);
+        
+        const fillLight = new THREE.PointLight(0x3b82f6, 0.3);
+        fillLight.position.set(-4, -2, -2);
+        scene.add(fillLight);
+
+        // Materials
+        const metalMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.2 });
+        const darkMetal = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.9, roughness: 0.4 });
+        const brassMaterial = new THREE.MeshStandardMaterial({ color: 0xb5a642, metalness: 0.7, roughness: 0.3 });
+        const stringMaterial = new THREE.LineBasicMaterial({ color: 0xdddddd, linewidth: 2 });
+
+        // Lab Environment
+        const groupStand = new THREE.Group();
+        
+        // Base
+        const baseGeo = new THREE.BoxGeometry(3.0, 0.1, 2.0);
+        const base = new THREE.Mesh(baseGeo, darkMetal);
+        base.position.y = -5.8; // Lowered to securely hold L=5m bob
+        base.receiveShadow = true;
+        groupStand.add(base);
+
+        // Vertical Rod
+        const rodGeo = new THREE.CylinderGeometry(0.02, 0.02, 6.5);
+        const rod = new THREE.Mesh(rodGeo, metalMaterial);
+        rod.position.y = -2.75; 
+        rod.position.x = -0.5;
+        rod.castShadow = true;
+        groupStand.add(rod);
+
+        // Horizontal Clamp
+        const clampGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.8);
+        const clamp = new THREE.Mesh(clampGeo, metalMaterial);
+        clamp.rotation.z = Math.PI / 2;
+        clamp.position.set(-0.1, 0, 0);
+        clamp.castShadow = true;
+        groupStand.add(clamp);
+
+        // Pivot point
+        const pivotGeo = new THREE.SphereGeometry(0.04, 16, 16);
+        const pivot = new THREE.Mesh(pivotGeo, brassMaterial);
+        groupStand.add(pivot);
+
+        scene.add(groupStand);
+
+        // Pendulum Dynamic Objects
+        const bobGroup = new THREE.Group();
+        scene.add(bobGroup);
+
+        const bobRadius = 0.1; 
+        const bobGeo = new THREE.SphereGeometry(bobRadius, 32, 32);
+        const bobMesh = new THREE.Mesh(bobGeo, brassMaterial);
+        bobMesh.castShadow = true;
+        bobGroup.add(bobMesh);
+
+        // String
+        const stringGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0, -sim.L, 0)]);
+        const stringLine = new THREE.Line(stringGeo, stringMaterial);
+        stringLine.frustumCulled = false; // CRITICAL FIX: prevents string vanishing
+        scene.add(stringLine);
+
+        // FBD Vectors
+        const vecOrigin = new THREE.Vector3();
+        const arrowG = new THREE.ArrowHelper(new THREE.Vector3(0,-1,0), vecOrigin, 0.5, 0xffaa00);
+        const arrowT = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), vecOrigin, 0.5, 0x00ffaa);
+        const arrowV = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), vecOrigin, 0.5, 0x3b82f6);
+        bobGroup.add(arrowG);
+        bobGroup.add(arrowT);
+        bobGroup.add(arrowV);
+
+        // Floor Grid
+        const gridHelper = new THREE.GridHelper(15, 30, 0x333333, 0x1a1a1a);
+        gridHelper.position.y = -5.8;
+        scene.add(gridHelper);
+
+        // Resize Observer for responsive Canvas
+        const resizeObserver = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                const width = entry.contentRect.width;
+                const height = entry.contentRect.height;
+                if(width > 0 && height > 0) {
+                    camera.aspect = width / height;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(width, height);
+                }
+            }
+        });
+        resizeObserver.observe(container);
+
+        /**
+         * Chart setup
+         */
+        Chart.defaults.color = '#9ca3af';
+        Chart.defaults.font.family = 'Inter';
+        Chart.defaults.font.size = 10;
+        
+        const chartKCtx = document.getElementById('chart-kinematics').getContext('2d');
+        const chartKinematics = new Chart(chartKCtx, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'Angle (rad)', data: [], borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0, tension: 0.1 },
+                { label: 'Vel (rad/s)', data: [], borderColor: '#ef4444', borderWidth: 1.5, pointRadius: 0, tension: 0.1 }
+            ]},
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: { 
+                    x: { grid: { color: '#1f2937' } },
+                    y: { grid: { color: '#1f2937' } }
+                },
+                plugins: { legend: { position: 'top', labels: { boxWidth: 8 } } }
+            }
+        });
+
+        const chartECtx = document.getElementById('chart-energy').getContext('2d');
+        const chartEnergy = new Chart(chartECtx, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'PE', data: [], borderColor: '#3b82f6', borderWidth: 1.5, pointRadius: 0 },
+                { label: 'KE', data: [], borderColor: '#ef4444', borderWidth: 1.5, pointRadius: 0 },
+                { label: 'Total', data: [], borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0, borderDash: [3,3] }
+            ]},
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: { 
+                    x: { grid: { color: '#1f2937' } },
+                    y: { min: 0, grid: { color: '#1f2937' } }
+                },
+                plugins: { legend: { position: 'top', labels: { boxWidth: 8 } } }
+            }
+        });
+
+        const chartPCtx = document.getElementById('chart-phase').getContext('2d');
+        const chartPhase = new Chart(chartPCtx, {
+            type: 'scatter',
+            data: { datasets: [{
+                label: 'Phase Trajectory', data: [], backgroundColor: '#8b5cf6', borderColor: '#8b5cf6',
+                borderWidth: 1, pointRadius: 1, showLine: true, tension: 0.1
+            }]},
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: {
+                    x: { title: { display: true, text: 'θ (rad)', color:'#6b7280' }, grid: { color: '#1f2937' } },
+                    y: { title: { display: true, text: 'dθ/dt (rad/s)', color:'#6b7280' }, grid: { color: '#1f2937' } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        /**
+         * UI Interactions & Event Listeners
+         */
+        const DOM = {
+            btnStart: document.getElementById('btn-start'),
+            btnReset: document.getElementById('btn-reset'),
+            btnRecord: document.getElementById('btn-record'),
+            
+            sLength: document.getElementById('slider-length'),
+            sMass: document.getElementById('slider-mass'),
+            sAngle: document.getElementById('slider-angle'),
+            sDamping: document.getElementById('slider-damping'),
+            sTimeScale: document.getElementById('slider-timescale'),
+            selGravity: document.getElementById('select-gravity'),
+            chkSmall: document.getElementById('check-small-angle'),
+            chkFBD: document.getElementById('check-fbd'),
+            
+            vLength: document.getElementById('val-length'),
+            vMass: document.getElementById('val-mass'),
+            vAngle: document.getElementById('val-angle'),
+            vDamping: document.getElementById('val-damping'),
+            vTimeScale: document.getElementById('val-timescale'),
+            
+            lTime: document.getElementById('live-t'),
+            lTheta: document.getElementById('live-theta'),
+            lOmega: document.getElementById('live-omega'),
+            lAlpha: document.getElementById('live-alpha'),
+            lTension: document.getElementById('live-tension'),
+            
+            peVal: document.getElementById('val-pe'),
+            keVal: document.getElementById('val-ke'),
+            teVal: document.getElementById('val-te'),
+            peBar: document.getElementById('pe-bar'),
+            keBar: document.getElementById('ke-bar'),
+            teBar: document.getElementById('te-bar'),
+            
+            mathEOM: document.getElementById('math-eom'),
+            
+            tabs: document.querySelectorAll('.tab-btn'),
+            tabContents: document.querySelectorAll('.tab-content'),
+            tbody: document.getElementById('table-body'),
+            tEmpty: document.getElementById('table-empty')
+        };
+
+        const MAX_POINTS = 250;
+        let frameCount = 0;
+        let activeTab = 'tab-graphs';
+
+        function updateGraphs() {
+            if (!sim.isRunning) return;
+            frameCount++;
+            if (frameCount % 4 !== 0) return; // Throttle to save CPU
+
+            const t = sim.time;
+            const theta = sim.state[0];
+            const omega = sim.state[1];
+
+            // Update underlying data arrays regardless of visibility
+            chartKinematics.data.labels.push(t.toFixed(1));
+            chartKinematics.data.datasets[0].data.push(theta);
+            chartKinematics.data.datasets[1].data.push(omega);
+            if (chartKinematics.data.labels.length > MAX_POINTS) {
+                chartKinematics.data.labels.shift();
+                chartKinematics.data.datasets[0].data.shift();
+                chartKinematics.data.datasets[1].data.shift();
+            }
+
+            chartEnergy.data.labels.push(t.toFixed(1));
+            chartEnergy.data.datasets[0].data.push(sim.PE);
+            chartEnergy.data.datasets[1].data.push(sim.KE);
+            chartEnergy.data.datasets[2].data.push(sim.TE);
+            if (chartEnergy.data.labels.length > MAX_POINTS) {
+                chartEnergy.data.labels.shift();
+                chartEnergy.data.datasets[0].data.shift();
+                chartEnergy.data.datasets[1].data.shift();
+                chartEnergy.data.datasets[2].data.shift();
+            }
+            chartEnergy.options.scales.y.max = sim.maxEnergy * 1.1;
+
+            chartPhase.data.datasets[0].data.push({x: theta, y: omega});
+            if (chartPhase.data.datasets[0].data.length > MAX_POINTS * 1.5) {
+                chartPhase.data.datasets[0].data.shift();
+            }
+
+            // Only trigger render if tab is visible to optimize framerate
+            if(activeTab === 'tab-graphs') {
+                chartKinematics.update();
+                chartEnergy.update();
+            } else if (activeTab === 'tab-phase') {
+                chartPhase.update();
+            }
+        }
+
+        function clearGraphs() {
+            chartKinematics.data.labels = []; chartKinematics.data.datasets.forEach(d => d.data = []); chartKinematics.update();
+            chartEnergy.data.labels = []; chartEnergy.data.datasets.forEach(d => d.data = []); chartEnergy.update();
+            chartPhase.data.datasets[0].data = []; chartPhase.update();
+        }
+
+        DOM.sLength.addEventListener('input', (e) => {
+            sim.L = parseFloat(e.target.value);
+            DOM.vLength.innerText = sim.L.toFixed(2) + ' m';
+            if (!sim.isRunning) { update3D(); updateUI(); }
+        });
+
+        DOM.sMass.addEventListener('input', (e) => {
+            sim.m = parseFloat(e.target.value);
+            DOM.vMass.innerText = sim.m.toFixed(2) + ' kg';
+            const newScale = Math.pow(sim.m, 1/3); // Visual scale
+            bobMesh.scale.set(newScale, newScale, newScale);
+            if (!sim.isRunning) { update3D(); updateUI(); }
+        });
+
+        DOM.sAngle.addEventListener('input', (e) => {
+            sim.theta0 = parseFloat(e.target.value) * Math.PI / 180;
+            DOM.vAngle.innerText = e.target.value + '°';
+            sim.reset(); clearGraphs(); update3D(); updateUI();
+        });
+
+        DOM.sDamping.addEventListener('input', (e) => {
+            sim.damping = parseFloat(e.target.value);
+            DOM.vDamping.innerText = sim.damping.toFixed(2);
+            updateMathDisplay();
+        });
+
+        DOM.sTimeScale.addEventListener('input', (e) => {
+            sim.timeScale = parseFloat(e.target.value);
+            DOM.vTimeScale.innerText = sim.timeScale.toFixed(1) + 'x';
+        });
+
+        DOM.selGravity.addEventListener('change', (e) => {
+            sim.g = parseFloat(e.target.value);
+            updateMathDisplay();
+            if (!sim.isRunning) { update3D(); updateUI(); }
+        });
+
+        DOM.chkSmall.addEventListener('change', (e) => {
+            sim.useSmallAngleEq = e.target.checked;
+            updateMathDisplay();
+        });
+
+        DOM.chkFBD.addEventListener('change', (e) => {
+            const show = e.target.checked;
+            arrowG.visible = show; arrowT.visible = show; arrowV.visible = show;
+        });
+
+        DOM.btnStart.addEventListener('click', () => {
+            sim.isRunning = !sim.isRunning;
+            if(sim.isRunning) {
+                DOM.btnStart.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> <span>Pause</span>`;
+                DOM.btnStart.className = 'bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-1.5 rounded-md font-medium transition-colors shadow-sm flex items-center gap-2';
+            } else {
+                DOM.btnStart.innerHTML = `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg> <span>Resume</span>`;
+                DOM.btnStart.className = 'bg-green-600 hover:bg-green-500 text-white px-4 py-1.5 rounded-md font-medium transition-colors shadow-sm flex items-center gap-2';
+            }
+        });
+
+        DOM.btnReset.addEventListener('click', () => {
+            sim.isRunning = false;
+            DOM.btnStart.innerHTML = `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg> <span>Start</span>`;
+            DOM.btnStart.className = 'bg-green-600 hover:bg-green-500 text-white px-4 py-1.5 rounded-md font-medium transition-colors shadow-sm flex items-center gap-2';
+            sim.reset(); clearGraphs(); update3D(); updateUI();
+        });
+
+        let trialCount = 0;
+        DOM.btnRecord.addEventListener('click', () => {
+            trialCount++;
+            DOM.tEmpty.style.display = 'none';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="pl-4">${trialCount}</td>
+                <td>${sim.L.toFixed(2)}</td>
+                <td>${sim.m.toFixed(2)}</td>
+                <td>${sim.g.toFixed(2)}</td>
+                <td>${(sim.theta0 * 180 / Math.PI).toFixed(1)}°</td>
+                <td class="${sim.measuredPeriod > 0 ? 'text-green-400' : 'text-yellow-400'}">
+                    ${sim.measuredPeriod > 0 ? sim.measuredPeriod.toFixed(3) : 'Calc...'}
+                </td>
+                <td>${sim.getTheoreticalPeriod().toFixed(3)}</td>
+                <td>${Math.abs(sim.state[1]).toFixed(2)}</td>
+                <td class="pr-4"><button class="text-red-400 hover:text-red-300 text-[10px]" onclick="this.closest('tr').remove()">Del</button></td>
+            `;
+            DOM.tbody.appendChild(tr);
+        });
+
+        DOM.tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                DOM.tabs.forEach(t => {
+                    t.classList.remove('text-blue-400', 'border-blue-500');
+                    t.classList.add('text-gray-400', 'border-transparent');
+                });
+                DOM.tabContents.forEach(c => c.classList.add('hidden'));
+                
+                tab.classList.remove('text-gray-400', 'border-transparent');
+                tab.classList.add('text-blue-400', 'border-blue-500');
+                
+                activeTab = tab.dataset.target;
+                const targetEl = document.getElementById(activeTab);
+                targetEl.classList.remove('hidden');
+                if(activeTab === 'tab-phase' || activeTab === 'tab-graphs') targetEl.classList.add('flex');
+                
+                chartKinematics.update(); chartEnergy.update(); chartPhase.update();
+            });
+        });
+
+        function update3D() {
+            const theta = sim.state[0];
+            const L = sim.L;
+            
+            const bx = L * Math.sin(theta);
+            const by = -L * Math.cos(theta);
+            bobGroup.position.set(bx, by, 0);
+            
+            const positions = stringLine.geometry.attributes.position.array;
+            positions[3] = bx; positions[4] = by;
+            stringLine.geometry.attributes.position.needsUpdate = true;
+
+            if (DOM.chkFBD.checked) {
+                const dirT = new THREE.Vector3(-bx, -by, 0).normalize();
+                arrowT.setDirection(dirT);
+                
+                const w = sim.m * sim.g;
+                const tensionScale = w > 0 ? Math.max(0.1, sim.tension / w) : 0.1;
+                arrowG.setLength(0.8); 
+                arrowT.setLength(0.8 * tensionScale);
+
+                const dirV = new THREE.Vector3(Math.cos(theta), Math.sin(theta), 0);
+                if (sim.state[1] < 0) dirV.negate();
+                arrowV.setDirection(dirV);
+                const vMag = Math.abs(sim.state[1] * L);
+                arrowV.setLength(0.2 + vMag * 0.15);
+                arrowV.visible = vMag > 0.02;
+            }
+        }
+
+        function updateUI() {
+            if(frameCount % 2 !== 0 && sim.isRunning) return; // limit DOM updates
+
+            DOM.lTime.innerText = sim.time.toFixed(2) + ' s';
+            DOM.lTheta.innerText = (sim.state[0] * 180 / Math.PI).toFixed(1) + '°';
+            DOM.lOmega.innerText = sim.state[1].toFixed(2) + ' rad/s';
+            DOM.lAlpha.innerText = sim.alpha.toFixed(2) + ' rad/s²';
+            DOM.lTension.innerText = sim.tension.toFixed(2) + ' N';
+
+            DOM.peVal.innerText = sim.PE.toFixed(2) + ' J';
+            DOM.keVal.innerText = sim.KE.toFixed(2) + ' J';
+            DOM.teVal.innerText = sim.TE.toFixed(2) + ' J';
+
+            const maxE = sim.maxEnergy > 0 ? sim.maxEnergy : 1;
+            DOM.peBar.style.width = Math.min(100, Math.max(0, (sim.PE / maxE) * 100)) + '%';
+            DOM.keBar.style.width = Math.min(100, Math.max(0, (sim.KE / maxE) * 100)) + '%';
+            DOM.teBar.style.width = Math.min(100, Math.max(0, (sim.TE / maxE) * 100)) + '%';
+        }
+        
+        function updateMathDisplay() {
+            let eq = sim.useSmallAngleEq 
+                ? `\\ddot{\\theta} + \\frac{${sim.g}}{${sim.L}}\\theta` 
+                : `\\ddot{\\theta} + \\frac{${sim.g}}{${sim.L}}\\sin\\theta`;
+            if (sim.damping > 0) {
+                const b = (sim.damping * 2).toFixed(2);
+                eq += ` + ${b}\\dot{\\theta}`;
+            }
+            eq += ` = 0`;
+            DOM.mathEOM.innerHTML = `\\[ ${eq} \\]`;
+            if (window.renderMathInElement) {
+                renderMathInElement(DOM.mathEOM, { delimiters: [ {left: "\\[", right: "\\]", display: true} ] });
+            }
+        }
+
+        const clock = new THREE.Clock();
+        let accumulator = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (sim.isRunning) {
+                let frameTime = clock.getDelta() * sim.timeScale;
+                if (frameTime > 0.1) frameTime = 0.1;
+                accumulator += frameTime;
+
+                while (accumulator >= sim.dt) {
+                    sim.rk4Step(sim.dt);
+                    accumulator -= sim.dt;
+                }
+                update3D();
+                updateUI();
+                updateGraphs();
+            } else {
+                clock.getDelta(); // keep delta fresh
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = () => {
+            sim.reset();
+            update3D();
+            updateUI();
+            updateMathDisplay();
+            animate();
+        };
+    </script>
+</body>
+</html>

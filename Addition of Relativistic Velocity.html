@@ -1,0 +1,950 @@
+`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relativistic Velocity Addition Simulator</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for 3D Visualization -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Chart.js for Graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0f172a',
+                        darker: '#020617',
+                        panel: '#1e293b',
+                        accent: '#3b82f6',
+                        sFrame: '#10b981', // Green for S frame
+                        sPrimeFrame: '#ef4444', // Red for S' frame
+                        objectColor: '#f59e0b', // Yellow/Orange for Object
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap');
+        
+        body { margin: 0; overflow: hidden; background-color: #020617; color: #f8fafc; }
+        
+        /* Custom Scrollbar for panels */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        /* Layout Grid */
+        #app-container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            grid-template-rows: 60px 1fr;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        header { grid-column: 1 / -1; }
+        #visual-area { grid-column: 1 / 2; grid-row: 2 / 3; position: relative; }
+        #control-panel { grid-column: 2 / 3; grid-row: 2 / 3; border-left: 1px solid #334155; }
+        
+        /* Tabs styling */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-btn.active { border-bottom: 2px solid #3b82f6; color: #60a5fa; }
+        
+        /* Math text */
+        .math { font-family: 'Times New Roman', Times, serif; font-style: italic; }
+        .value-display { font-family: 'Fira Code', monospace; color: #38bdf8; }
+        
+        /* Rangeslider styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+
+        #spacetime-canvas { background-color: #0f172a; border-radius: 0.5rem; width: 100%; height: 100%; }
+        #chart-container { background-color: #0f172a; border-radius: 0.5rem; padding: 10px; width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <!-- Header -->
+    <header class="bg-panel border-b border-gray-700 flex items-center justify-between px-6 z-10 shadow-md">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-atom text-accent text-2xl"></i>
+            <div>
+                <h1 class="text-lg font-bold tracking-wide">Relativistic Velocity Addition</h1>
+                <p class="text-xs text-gray-400">Virtual Laboratory Simulator</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="bg-dark px-3 py-1 rounded text-sm font-mono flex items-center gap-2 border border-gray-700">
+                <span class="text-gray-400">c =</span>
+                <span class="text-green-400">299,792,458 m/s</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Visual Area (Left) -->
+    <main id="visual-area" class="bg-darker relative flex flex-col">
+        <!-- Viewport Selector Tabs -->
+        <div class="absolute top-4 left-4 z-10 bg-panel/80 backdrop-blur rounded-lg p-1 border border-gray-700 flex shadow-lg">
+            <button onclick="switchView('3d')" id="btn-view-3d" class="px-4 py-2 rounded text-sm font-medium transition-colors bg-accent text-white">3D Environment</button>
+            <button onclick="switchView('spacetime')" id="btn-view-spacetime" class="px-4 py-2 rounded text-sm font-medium transition-colors text-gray-400 hover:text-white">Minkowski Diagram</button>
+            <button onclick="switchView('graphs')" id="btn-view-graphs" class="px-4 py-2 rounded text-sm font-medium transition-colors text-gray-400 hover:text-white">Graphs</button>
+        </div>
+
+        <!-- 3D Environment -->
+        <div id="view-3d" class="flex-grow w-full h-full"></div>
+        
+        <!-- Spacetime Diagram -->
+        <div id="view-spacetime" class="flex-grow w-full h-full p-8 hidden relative">
+            <h2 class="absolute top-8 left-12 text-gray-300 font-semibold z-10">Spacetime Diagram (x, ct)</h2>
+            <canvas id="spacetime-canvas"></canvas>
+            <div class="absolute bottom-12 right-12 bg-panel/80 p-3 rounded border border-gray-700 text-xs text-gray-300 font-mono flex flex-col gap-1">
+                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400"></span> Photon Path (c)</div>
+                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Frame S (ct-axis)</div>
+                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span> Frame S' (ct'-axis)</div>
+                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-400"></span> Object Worldline</div>
+            </div>
+        </div>
+
+        <!-- Graphs -->
+        <div id="view-graphs" class="flex-grow w-full h-full p-8 hidden flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-gray-300 font-semibold">Relativistic Relationships</h2>
+                <select id="graph-selector" class="bg-dark border border-gray-600 rounded px-3 py-1 text-sm text-gray-200 outline-none focus:border-accent" onchange="updateChart()">
+                    <option value="velocity">Velocity Addition (u vs u')</option>
+                    <option value="gamma">Lorentz Factor (γ vs v)</option>
+                    <option value="energy">Kinetic Energy vs Velocity</option>
+                </select>
+            </div>
+            <div class="flex-grow relative w-full h-full">
+                <canvas id="chart-canvas"></canvas>
+            </div>
+        </div>
+
+        <!-- Simulation HUD Overlay -->
+        <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-panel/90 backdrop-blur px-6 py-3 rounded-full border border-gray-700 flex items-center gap-6 shadow-xl z-10 transition-opacity" id="sim-hud">
+            <button onclick="togglePlay()" id="play-btn" class="text-2xl text-accent hover:text-blue-400 transition-transform hover:scale-110"><i class="fa-solid fa-play"></i></button>
+            <button onclick="resetSimulation()" class="text-xl text-gray-400 hover:text-white transition-transform hover:scale-110"><i class="fa-solid fa-rotate-left"></i></button>
+            <div class="h-8 w-px bg-gray-600"></div>
+            <div class="text-sm font-mono flex items-center gap-4">
+                <div class="flex flex-col items-center"><span class="text-gray-400 text-xs">Sim Speed</span>
+                    <select id="sim-speed" class="bg-transparent text-white outline-none" onchange="updateSimSpeed()">
+                        <option value="0.1">0.1x</option>
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1.0x</option>
+                        <option value="2">2.0x</option>
+                    </select>
+                </div>
+                <div class="h-6 w-px bg-gray-600"></div>
+                <div class="flex flex-col items-center min-w-[80px]">
+                    <span class="text-gray-400 text-xs">Time (<span class="math">t</span>)</span>
+                    <span id="hud-time" class="text-white">0.00 s</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Control Panel (Right) -->
+    <aside id="control-panel" class="bg-panel flex flex-col h-full overflow-hidden">
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-700 text-sm font-medium text-gray-400">
+            <button class="tab-btn active flex-1 py-3 hover:text-white transition-colors" onclick="switchTab('controls', this)">Controls</button>
+            <button class="tab-btn flex-1 py-3 hover:text-white transition-colors" onclick="switchTab('data', this)">Live Data</button>
+            <button class="tab-btn flex-1 py-3 hover:text-white transition-colors" onclick="switchTab('table', this)">Table</button>
+        </div>
+
+        <div class="flex-grow overflow-y-auto p-5 relative">
+            
+            <!-- Tab: Controls -->
+            <div id="tab-controls" class="tab-content active space-y-6">
+                <!-- Observer Selection -->
+                <div class="bg-dark p-4 rounded-lg border border-gray-700">
+                    <h3 class="text-sm text-gray-400 mb-3 uppercase tracking-wider font-semibold">Observer Frame</h3>
+                    <div class="flex bg-gray-800 rounded p-1">
+                        <button id="obs-s" class="flex-1 py-1.5 rounded text-sm bg-sFrame text-dark font-bold transition-all" onclick="setObserver('S')">Frame S (Stationary)</button>
+                        <button id="obs-sprime" class="flex-1 py-1.5 rounded text-sm text-gray-400 hover:text-white transition-all" onclick="setObserver('Sprime')">Frame S' (Moving)</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2" id="observer-desc">Viewing the universe from the rest frame. S' is moving at velocity v.</p>
+                </div>
+
+                <!-- Parameters -->
+                <div class="space-y-5">
+                    <!-- Frame Velocity v -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-sm text-gray-300">Frame S' Velocity (<span class="math">v</span>)</label>
+                            <span class="value-display text-sm"><span id="val-v">0.500</span> c</span>
+                        </div>
+                        <input type="range" id="slider-v" min="-0.999" max="0.999" step="0.001" value="0.5">
+                        <div class="flex justify-between text-xs text-gray-500 mt-1"><span>-c</span><span>0</span><span>+c</span></div>
+                    </div>
+
+                    <!-- Object Velocity u' -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-sm text-gray-300">Object Velocity in S' (<span class="math">u'</span>)</label>
+                            <span class="value-display text-sm text-objectColor"><span id="val-uprime">0.500</span> c</span>
+                        </div>
+                        <input type="range" id="slider-uprime" min="-1.000" max="1.000" step="0.001" value="0.5">
+                        <div class="flex justify-between text-xs text-gray-500 mt-1"><span>-c</span><span>0</span><span>+c</span></div>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                         <button onclick="presetExperiment('photon')" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded py-2 text-xs transition-colors">Shoot Photon (u'=1c)</button>
+                         <button onclick="presetExperiment('classical')" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded py-2 text-xs transition-colors">Low Speeds (0.1c)</button>
+                    </div>
+                </div>
+                
+                <!-- Object Properties -->
+                <div class="border-t border-gray-700 pt-4">
+                     <div class="flex justify-between mb-1">
+                            <label class="text-sm text-gray-300">Rest Mass (<span class="math">m₀</span>)</label>
+                            <span class="value-display text-sm"><span id="val-mass">1.0</span> kg</span>
+                        </div>
+                        <input type="range" id="slider-mass" min="0.1" max="100" step="0.1" value="1.0">
+                </div>
+            </div>
+
+            <!-- Tab: Live Data -->
+            <div id="tab-data" class="tab-content space-y-4">
+                <div class="bg-dark border border-gray-700 rounded-lg p-4 shadow-inner">
+                    <h3 class="text-xs text-gray-400 uppercase tracking-wider mb-2 font-semibold">Transformations</h3>
+                    <div class="grid grid-cols-2 gap-y-3 gap-x-2 text-sm">
+                        <div class="text-gray-400">Lorentz Factor (<span class="math">γ</span>)</div>
+                        <div class="text-right value-display" id="data-gamma">1.155</div>
+                        
+                        <div class="text-gray-400">Length Contraction (<span class="math">L/L₀</span>)</div>
+                        <div class="text-right value-display" id="data-length">0.866</div>
+                        
+                        <div class="text-gray-400">Time Dilation (<span class="math">Δt/Δt₀</span>)</div>
+                        <div class="text-right value-display" id="data-time">1.155</div>
+                    </div>
+                </div>
+
+                <div class="bg-dark border border-gray-700 rounded-lg p-4 shadow-inner relative overflow-hidden">
+                    <div class="absolute right-0 top-0 w-1 h-full bg-accent"></div>
+                    <h3 class="text-xs text-gray-400 uppercase tracking-wider mb-2 font-semibold">Velocity Addition Result</h3>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between border-b border-gray-800 pb-2">
+                            <span class="text-gray-300">Classical (<span class="math">u = u' + v</span>)</span>
+                            <span class="value-display text-red-400 line-through" id="data-u-class">1.000 c</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-white font-medium">Relativistic (<span class="math">u = \frac{u'+v}{1+u'v/c²}</span>)</span>
+                            <span class="value-display text-green-400 font-bold text-base" id="data-u-rel">0.800 c</span>
+                        </div>
+                        <div class="w-full bg-gray-800 rounded-full h-1.5 mt-2">
+                            <div id="u-bar" class="bg-green-400 h-1.5 rounded-full transition-all duration-100" style="width: 80%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-dark border border-gray-700 rounded-lg p-4 shadow-inner">
+                    <h3 class="text-xs text-gray-400 uppercase tracking-wider mb-2 font-semibold">Object Dynamics (in Frame S)</h3>
+                    <div class="grid grid-cols-1 gap-y-2 text-sm font-mono">
+                        <div class="flex justify-between"><span class="text-gray-400 font-sans">Rest Energy (<span class="math">E₀</span>)</span><span id="data-e0"></span></div>
+                        <div class="flex justify-between"><span class="text-gray-400 font-sans">Total Energy (<span class="math">E=γmc²</span>)</span><span id="data-e" class="text-yellow-200"></span></div>
+                        <div class="flex justify-between"><span class="text-gray-400 font-sans">Momentum (<span class="math">p=γmu</span>)</span><span id="data-p" class="text-blue-200"></span></div>
+                    </div>
+                    <p class="text-[10px] text-gray-500 mt-2">* Values computed using c = 3×10⁸ m/s for simplified display logic.</p>
+                </div>
+            </div>
+
+            <!-- Tab: Table -->
+            <div id="tab-table" class="tab-content flex flex-col h-full">
+                <div class="flex gap-2 mb-4">
+                    <button onclick="recordData()" class="flex-1 bg-accent hover:bg-blue-600 text-white rounded py-2 text-sm transition-colors"><i class="fa-solid fa-plus mr-1"></i> Record Data</button>
+                    <button onclick="exportCSV()" class="bg-gray-700 hover:bg-gray-600 text-white rounded px-3 py-2 text-sm transition-colors" title="Export CSV"><i class="fa-solid fa-download"></i></button>
+                    <button onclick="clearTable()" class="bg-red-900/50 hover:bg-red-800/80 text-white rounded px-3 py-2 text-sm transition-colors" title="Clear"><i class="fa-solid fa-trash"></i></button>
+                </div>
+                
+                <div class="flex-grow overflow-auto border border-gray-700 rounded bg-dark">
+                    <table class="w-full text-left text-xs text-gray-300">
+                        <thead class="bg-gray-800 text-gray-400 sticky top-0">
+                            <tr>
+                                <th class="p-2">v (c)</th>
+                                <th class="p-2">u' (c)</th>
+                                <th class="p-2 border-r border-gray-700">Classical u</th>
+                                <th class="p-2 text-green-400">Relativistic u</th>
+                                <th class="p-2">γ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="data-table-body" class="divide-y divide-gray-800 font-mono">
+                            <!-- Rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-[10px] text-gray-500 mt-2 text-center">Verify that Relativistic u never exceeds 1c.</p>
+            </div>
+
+        </div>
+    </aside>
+</div>
+
+<script>
+    // --- STATE MANAGEMENT ---
+    const C_LIGHT = 299792458; // Actual speed of light (not used directly in unitless fraction math, but for display)
+    const C_SIMP = 3e8; // Simplified for energy calcs to avoid overflow in display
+
+    const state = {
+        v: 0.5,         // Velocity of Frame S' relative to S (fraction of c)
+        uPrime: 0.5,    // Velocity of Object relative to S' (fraction of c)
+        mass: 1.0,      // Rest mass in kg
+        time: 0,        // Simulation time (in the rest frame of the chosen observer)
+        isPlaying: false,
+        simSpeed: 1.0,
+        observer: 'S',  // 'S' or 'Sprime'
+        recordedData: []
+    };
+
+    // --- PHYSICS CORE ---
+    
+    // Lorentz Factor: γ = 1 / √(1 - v²/c²) (where v is fraction of c)
+    function calcGamma(vel) {
+        if (Math.abs(vel) >= 1) return Infinity; // Prevent NaN
+        return 1 / Math.sqrt(1 - vel * vel);
+    }
+
+    // Relativistic Velocity Addition: u = (u' + v) / (1 + u'v/c²)
+    function calcRelU(uP, vFrame) {
+        return (uP + vFrame) / (1 + (uP * vFrame));
+    }
+
+    // Classical Velocity Addition: u = u' + v
+    function calcClassU(uP, vFrame) {
+        return uP + vFrame;
+    }
+    
+    function formatExp(num) {
+        if (num === 0) return "0.00";
+        if (!isFinite(num)) return "Infinity";
+        let exp = num.toExponential(2);
+        return exp.replace('e+', ' × 10^').replace('e-', ' × 10^-');
+    }
+
+    // --- UI LOGIC ---
+
+    // DOM Elements
+    const els = {
+        valV: document.getElementById('val-v'),
+        valUprime: document.getElementById('val-uprime'),
+        valMass: document.getElementById('val-mass'),
+        sliderV: document.getElementById('slider-v'),
+        sliderUprime: document.getElementById('slider-uprime'),
+        sliderMass: document.getElementById('slider-mass'),
+        
+        dGamma: document.getElementById('data-gamma'),
+        dLength: document.getElementById('data-length'),
+        dTime: document.getElementById('data-time'),
+        dUclass: document.getElementById('data-u-class'),
+        dUrel: document.getElementById('data-u-rel'),
+        uBar: document.getElementById('u-bar'),
+        
+        dE0: document.getElementById('data-e0'),
+        dE: document.getElementById('data-e'),
+        dP: document.getElementById('data-p'),
+        
+        hudTime: document.getElementById('hud-time'),
+        playBtn: document.getElementById('play-btn')
+    };
+
+    function updatePhysicsState() {
+        state.v = parseFloat(els.sliderV.value);
+        state.uPrime = parseFloat(els.sliderUprime.value);
+        state.mass = parseFloat(els.sliderMass.value);
+        
+        els.valV.textContent = state.v.toFixed(3);
+        els.valUprime.textContent = state.uPrime.toFixed(3);
+        els.valMass.textContent = state.mass.toFixed(1);
+        
+        updateLiveCalculations();
+        if(chartInstance) updateChart();
+        drawSpacetime();
+    }
+
+    function updateLiveCalculations() {
+        const gammaFrame = calcGamma(state.v);
+        const uRel = calcRelU(state.uPrime, state.v);
+        const uClass = calcClassU(state.uPrime, state.v);
+        
+        // Kinematics for S observer viewing object
+        // Object velocity in S is uRel.
+        const gammaObjS = calcGamma(uRel); 
+        
+        els.dGamma.textContent = gammaFrame.toFixed(3);
+        els.dLength.textContent = (1/gammaFrame).toFixed(3);
+        els.dTime.textContent = gammaFrame.toFixed(3);
+        
+        els.dUclass.textContent = uClass.toFixed(3) + ' c';
+        els.dUrel.textContent = uRel.toFixed(3) + ' c';
+        
+        // Warning color if classical exceeds c
+        els.dUclass.className = Math.abs(uClass) > 1 ? "value-display text-red-500 font-bold" : "value-display text-gray-400 line-through";
+        
+        // Progress bar for relativistic speed
+        els.uBar.style.width = `${Math.abs(uRel) * 100}%`;
+        
+        // Dynamics (Approximated c for clean display)
+        const E0 = state.mass * C_SIMP * C_SIMP;
+        const E = gammaObjS === Infinity ? Infinity : gammaObjS * E0;
+        // p = gamma * m * v = gamma * m * (uRel * c)
+        const P = gammaObjS === Infinity ? Infinity : gammaObjS * state.mass * (uRel * C_SIMP);
+        
+        els.dE0.innerHTML = formatExp(E0) + ' J';
+        els.dE.innerHTML = gammaObjS === Infinity ? 'Infinity J' : formatExp(E) + ' J';
+        els.dP.innerHTML = gammaObjS === Infinity ? 'Infinity kg·m/s' : formatExp(Math.abs(P)) + ' kg·m/s';
+    }
+
+    // Event Listeners for Sliders
+    els.sliderV.addEventListener('input', updatePhysicsState);
+    els.sliderUprime.addEventListener('input', updatePhysicsState);
+    els.sliderMass.addEventListener('input', updatePhysicsState);
+
+    // Tab Switching Logic
+    function switchTab(tabId, btnElement) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active', 'border-b-2', 'border-blue-500', 'text-blue-400'));
+        
+        document.getElementById('tab-' + tabId).classList.add('active');
+        btnElement.classList.add('active', 'border-b-2', 'border-blue-500', 'text-blue-400');
+    }
+
+    // View Switching Logic (3D, Spacetime, Graphs)
+    function switchView(viewId) {
+        document.getElementById('view-3d').classList.add('hidden');
+        document.getElementById('view-spacetime').classList.add('hidden');
+        document.getElementById('view-graphs').classList.add('hidden');
+        document.getElementById('sim-hud').classList.add('hidden');
+        
+        document.getElementById('btn-view-3d').className = "px-4 py-2 rounded text-sm font-medium transition-colors text-gray-400 hover:text-white";
+        document.getElementById('btn-view-spacetime').className = "px-4 py-2 rounded text-sm font-medium transition-colors text-gray-400 hover:text-white";
+        document.getElementById('btn-view-graphs').className = "px-4 py-2 rounded text-sm font-medium transition-colors text-gray-400 hover:text-white";
+
+        document.getElementById('view-' + viewId).classList.remove('hidden');
+        document.getElementById('btn-view-' + viewId).className = "px-4 py-2 rounded text-sm font-medium transition-colors bg-accent text-white";
+        
+        if (viewId === '3d') {
+            document.getElementById('sim-hud').classList.remove('hidden');
+            onWindowResize(); // Fix Three.js canvas size
+        } else if (viewId === 'spacetime') {
+            setTimeout(drawSpacetime, 50); // Ensure the div has expanded before drawing
+        } else if (viewId === 'graphs') {
+            if(!chartInstance) {
+                initChart();
+            } else {
+                setTimeout(() => chartInstance.resize(), 50); // Fix graph sizing when unhiding
+            }
+            updateChart();
+        }
+    }
+
+    function setObserver(obs) {
+        state.observer = obs;
+        const btnS = document.getElementById('obs-s');
+        const btnSp = document.getElementById('obs-sprime');
+        const desc = document.getElementById('observer-desc');
+        
+        if (obs === 'S') {
+            btnS.className = "flex-1 py-1.5 rounded text-sm bg-sFrame text-dark font-bold transition-all shadow";
+            btnSp.className = "flex-1 py-1.5 rounded text-sm text-gray-400 hover:text-white transition-all";
+            desc.textContent = "Viewing universe from Stationary Frame S. Frame S' is moving at velocity v.";
+        } else {
+            btnSp.className = "flex-1 py-1.5 rounded text-sm bg-sPrimeFrame text-white font-bold transition-all shadow";
+            btnS.className = "flex-1 py-1.5 rounded text-sm text-gray-400 hover:text-white transition-all";
+            desc.textContent = "Viewing universe from Moving Frame S'. Frame S is moving backwards at -v.";
+        }
+        // Reset positions smoothly upon observer change
+        resetSimulation();
+    }
+
+    function presetExperiment(type) {
+        if(type === 'photon') {
+            els.sliderV.value = 0.5;
+            els.sliderUprime.value = 1.0;
+        } else if (type === 'classical') {
+            els.sliderV.value = 0.1;
+            els.sliderUprime.value = 0.1;
+        }
+        updatePhysicsState();
+    }
+
+    // Simulation Controls
+    function togglePlay() {
+        state.isPlaying = !state.isPlaying;
+        els.playBtn.innerHTML = state.isPlaying ? '<i class="fa-solid fa-pause"></i>' : '<i class="fa-solid fa-play"></i>';
+    }
+    
+    function resetSimulation() {
+        state.time = 0;
+        updateTimeDisplay();
+        // Keep playing state as is
+    }
+
+    function updateSimSpeed() {
+        state.simSpeed = parseFloat(document.getElementById('sim-speed').value);
+    }
+    
+    function updateTimeDisplay() {
+        els.hudTime.textContent = state.time.toFixed(2) + ' s';
+    }
+
+    // Data Table Logic
+    function recordData() {
+        const uRel = calcRelU(state.uPrime, state.v);
+        const uClass = calcClassU(state.uPrime, state.v);
+        const gammaFrame = calcGamma(state.v);
+        
+        state.recordedData.push({
+            v: state.v.toFixed(3),
+            uPrime: state.uPrime.toFixed(3),
+            uClass: uClass.toFixed(3),
+            uRel: uRel.toFixed(3),
+            gamma: gammaFrame.toFixed(3)
+        });
+        
+        renderTable();
+    }
+    
+    function renderTable() {
+        const tbody = document.getElementById('data-table-body');
+        tbody.innerHTML = '';
+        state.recordedData.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.className = "border-b border-gray-800 hover:bg-gray-800/50 transition-colors";
+            tr.innerHTML = `
+                <td class="p-2">${row.v}</td>
+                <td class="p-2">${row.uPrime}</td>
+                <td class="p-2 border-r border-gray-700 ${Math.abs(row.uClass)>1?'text-red-400':''}">${row.uClass}</td>
+                <td class="p-2 text-green-400">${row.uRel}</td>
+                <td class="p-2">${row.gamma}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    
+    function clearTable() {
+        state.recordedData = [];
+        renderTable();
+    }
+
+    function exportCSV() {
+        let csv = "v(c),u'(c),Classical_u(c),Relativistic_u(c),Gamma\n";
+        state.recordedData.forEach(row => {
+            csv += `${row.v},${row.uPrime},${row.uClass},${row.uRel},${row.gamma}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.setAttribute('hidden', '');
+        a.setAttribute('href', url);
+        a.setAttribute('download', 'relativistic_velocity_data.csv');
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    // --- THREE.JS SETUP ---
+    
+    const container3D = document.getElementById('view-3d');
+    const scene = new THREE.Scene();
+    // Dark space background
+    scene.background = new THREE.Color(0x020617);
+    scene.fog = new THREE.FogExp2(0x020617, 0.02);
+
+    const camera = new THREE.PerspectiveCamera(45, container3D.clientWidth / container3D.clientHeight, 0.1, 1000);
+    camera.position.set(0, 5, 15);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container3D.clientWidth, container3D.clientHeight);
+    container3D.appendChild(renderer.domElement);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(10, 20, 10);
+    scene.add(dirLight);
+
+    // Helpers: Grids representing reference frames
+    const gridSize = 100;
+    const gridDivisions = 50;
+    
+    // Frame S (Greenish)
+    const gridS = new THREE.GridHelper(gridSize, gridDivisions, 0x10b981, 0x10b981);
+    gridS.material.opacity = 0.3;
+    gridS.material.transparent = true;
+    scene.add(gridS);
+    
+    // Origin marker S
+    const originS = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshBasicMaterial({color: 0x10b981}));
+    scene.add(originS);
+
+    // Frame S' (Reddish) - Slightly above S to avoid Z-fighting
+    const gridSPrime = new THREE.GridHelper(gridSize, gridDivisions, 0xef4444, 0xef4444);
+    gridSPrime.position.y = 0.05;
+    gridSPrime.material.opacity = 0.5;
+    gridSPrime.material.transparent = true;
+    scene.add(gridSPrime);
+    
+    // Origin marker S'
+    const originSPrime = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshBasicMaterial({color: 0xef4444}));
+    originSPrime.position.y = 0.05;
+    scene.add(originSPrime);
+
+    // Moving Object (Spaceship/Particle)
+    const objGroup = new THREE.Group();
+    // Body (Replaced CapsuleGeometry with universally supported CylinderGeometry)
+    const objMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.2, 0.2, 0.8, 16), 
+        new THREE.MeshStandardMaterial({color: 0xf59e0b, emissive: 0x92400e, metalness: 0.8, roughness: 0.2})
+    );
+    objMesh.rotation.z = Math.PI / 2; // Point along X axis
+    objMesh.position.y = 0.5;
+    objGroup.add(objMesh);
+    
+    // Engine Glow
+    const glowMat = new THREE.MeshBasicMaterial({color: 0x60a5fa, transparent:true, opacity: 0.8});
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), glowMat);
+    glow.position.set(-0.6, 0.5, 0);
+    objGroup.add(glow);
+    
+    scene.add(objGroup);
+
+    // Starfield for background reference
+    const starsGeo = new THREE.BufferGeometry();
+    const starsCount = 1000;
+    const posArray = new Float32Array(starsCount * 3);
+    for(let i=0; i<starsCount*3; i++) {
+        posArray[i] = (Math.random() - 0.5) * 200;
+    }
+    starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    const starsMat = new THREE.PointsMaterial({size: 0.1, color: 0xffffff, transparent:true, opacity: 0.5});
+    const starMesh = new THREE.Points(starsGeo, starsMat);
+    scene.add(starMesh);
+
+    window.addEventListener('resize', onWindowResize, false);
+    function onWindowResize() {
+        if(container3D.clientWidth === 0) return; // Hidden
+        camera.aspect = container3D.clientWidth / container3D.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container3D.clientWidth, container3D.clientHeight);
+    }
+
+    // --- SPACETIME DIAGRAM (2D Canvas) ---
+    function drawSpacetime() {
+        const canvas = document.getElementById('spacetime-canvas');
+        if(!canvas || canvas.offsetParent === null) return; // Not visible
+        
+        const ctx = canvas.getContext('2d');
+        // Match physical pixels to CSS size for sharpness
+        canvas.width = canvas.clientWidth * window.devicePixelRatio;
+        canvas.height = canvas.clientHeight * window.devicePixelRatio;
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        const cx = w / 2;
+        const cy = h / 2;
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        // Grid & Axes
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for(let i = 0; i < w; i+=40) { ctx.moveTo(i, 0); ctx.lineTo(i, h); }
+        for(let i = 0; i < h; i+=40) { ctx.moveTo(0, i); ctx.lineTo(w, i); }
+        ctx.stroke();
+
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, cy); ctx.lineTo(w, cy); // x-axis
+        ctx.moveTo(cx, 0); ctx.lineTo(cx, h); // ct-axis
+        ctx.stroke();
+        
+        // Labels
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '14px "Fira Code", monospace';
+        ctx.fillText("x", w - 20, cy - 10);
+        ctx.fillText("ct", cx + 10, 20);
+
+        // Light Cone (c=1, angle=45deg)
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)'; // Yellow dashed
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(cx - h/2, h); ctx.lineTo(cx + h/2, 0);
+        ctx.moveTo(cx + h/2, h); ctx.lineTo(cx - h/2, 0);
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset
+
+        // Scale factor for drawing
+        const scale = Math.min(w, h) / 3; 
+        
+        // Worldline of S' relative to S (slope dt/dx = 1/v)
+        // x = vt => ct = (c/v)x => y = (1/v)x  (remember y is inverted on canvas)
+        const v = state.v;
+        if (Math.abs(v) > 0.01) {
+            ctx.strokeStyle = '#ef4444'; // Red for S'
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            // Start at bottom
+            let startY = h;
+            let startX = cx - (h/2 - cy) * v;
+            let endY = 0;
+            let endX = cx + (cy) * v;
+            
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            ctx.fillStyle = '#ef4444';
+            ctx.fillText("ct'", endX + 5, endY + 15);
+        }
+
+        // Worldline of Object in S
+        const u = calcRelU(state.uPrime, state.v);
+        if (Math.abs(u) > 0.001) {
+            ctx.strokeStyle = '#f97316'; // Orange
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            let startY = h;
+            let startX = cx - (h/2 - cy) * u;
+            let endY = 0;
+            let endX = cx + (cy) * u;
+            
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            ctx.fillStyle = '#f97316';
+            ctx.fillText("Object", endX - 40, endY + 15);
+        }
+    }
+
+    // --- CHARTS (Chart.js) ---
+    let chartInstance = null;
+
+    function initChart() {
+        const ctx = document.getElementById('chart-canvas').getContext('2d');
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { datasets: [] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                scales: {
+                    x: { type: 'linear', title: { display: true, text: 'Velocity (fraction of c)' }, grid: { color: '#334155' } },
+                    y: { title: { display: true, text: 'Value' }, grid: { color: '#334155' } }
+                },
+                plugins: {
+                    legend: { labels: { color: '#e2e8f0' } }
+                }
+            }
+        });
+    }
+
+    function updateChart() {
+        if(!chartInstance) return;
+        const type = document.getElementById('graph-selector').value;
+        const dataClass = [];
+        const dataRel = [];
+        const dataAux = []; // Gamma or Energy
+        
+        if (type === 'velocity') {
+            // u vs u' for current v
+            const v = state.v;
+            for(let up = -1; up <= 1; up += 0.05) {
+                // Avoid exactly 1 or -1 for classical to avoid blowing up graph scale unnecessarily if we restrict it, but it's linear so fine.
+                dataClass.push({x: up, y: calcClassU(up, v)});
+                dataRel.push({x: up, y: calcRelU(up, v)});
+            }
+            chartInstance.data.datasets = [
+                { label: 'Classical u = u\' + v', data: dataClass, borderColor: '#ef4444', borderDash: [5, 5], pointRadius: 0, tension: 0.1 },
+                { label: `Relativistic u (v=${v}c)`, data: dataRel, borderColor: '#10b981', pointRadius: 0, tension: 0.1 }
+            ];
+            chartInstance.options.scales.x.title.text = "Object velocity in S' (u')";
+            chartInstance.options.scales.y.title.text = "Measured velocity in S (u)";
+            chartInstance.options.scales.y.min = -2;
+            chartInstance.options.scales.y.max = 2;
+        } else if (type === 'gamma') {
+            for(let vel = -0.99; vel <= 0.99; vel += 0.02) {
+                dataAux.push({x: vel, y: calcGamma(vel)});
+            }
+            chartInstance.data.datasets = [
+                { label: 'Lorentz Factor (γ)', data: dataAux, borderColor: '#3b82f6', pointRadius: 0, tension: 0.1 }
+            ];
+            chartInstance.options.scales.x.title.text = "Velocity v (fraction of c)";
+            chartInstance.options.scales.y.title.text = "γ";
+            chartInstance.options.scales.y.min = 1;
+            chartInstance.options.scales.y.max = 10;
+        } else if (type === 'energy') {
+             for(let vel = 0; vel <= 0.99; vel += 0.02) {
+                const gamma = calcGamma(vel);
+                const ke = (gamma - 1); // Normalized KE / mc^2
+                const classKe = 0.5 * vel * vel; // Normalized classical KE / mc^2
+                dataAux.push({x: vel, y: ke});
+                dataClass.push({x: vel, y: classKe});
+            }
+            chartInstance.data.datasets = [
+                { label: 'Classical KE (1/2 mv²)', data: dataClass, borderColor: '#ef4444', borderDash: [5, 5], pointRadius: 0 },
+                { label: 'Relativistic KE ((γ-1)mc²)', data: dataAux, borderColor: '#f59e0b', pointRadius: 0 }
+            ];
+            chartInstance.options.scales.x.title.text = "Velocity u (fraction of c)";
+            chartInstance.options.scales.y.title.text = "Kinetic Energy (Units of mc²)";
+            chartInstance.options.scales.y.min = 0;
+            chartInstance.options.scales.y.max = 5;
+        }
+        
+        chartInstance.update();
+    }
+
+
+    // --- ANIMATION LOOP ---
+    let lastTime = performance.now();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        const now = performance.now();
+        const dt = (now - lastTime) / 1000; // Delta time in seconds
+        lastTime = now;
+
+        if (state.isPlaying) {
+            state.time += dt * state.simSpeed;
+            updateTimeDisplay();
+        }
+
+        // --- RELATIVISTIC VISUALIZATION LOGIC ---
+        // We use state.time as the time measured by the currently selected observer.
+        // If observer = 'S':
+        //   Grid S is stationary.
+        //   Grid S' moves at v.
+        //   Object moves at u = (u'+v)/(1+u'v).
+        // If observer = 'Sprime':
+        //   Grid S' is stationary.
+        //   Grid S moves at -v.
+        //   Object moves at u'.
+
+        // Visual Scale multiplier
+        const visualScale = 5.0; // visual units per 1c * 1s
+        const loopBound = 20; // Wrap around position for continuous animation
+        
+        if (state.observer === 'S') {
+            const v = state.v;
+            const u = calcRelU(state.uPrime, state.v);
+            const gammaFrame = calcGamma(v);
+            
+            // Frame S
+            gridS.position.x = 0;
+            originS.position.x = 0;
+            // Frame S does not appear contracted to itself
+            gridS.scale.x = 1;
+            
+            // Frame S'
+            // Calculate absolute position based on time
+            let posSprime = (v * state.time * visualScale);
+            // Wrap logic for clean visual looping
+            posSprime = ((posSprime + loopBound) % (loopBound * 2)) - loopBound;
+            
+            gridSPrime.position.x = posSprime;
+            originSPrime.position.x = posSprime;
+            
+            // Length Contraction: S sees S' contracted by 1/gamma
+            gridSPrime.scale.x = 1 / gammaFrame;
+            
+            // Object
+            let posObj = (u * state.time * visualScale);
+            // Ensure object stays somewhat near S' for visual continuity if it's moving with it, 
+            // but for simplicity, just wrap it within the screen bounds relative to origin.
+            posObj = ((posObj + loopBound) % (loopBound * 2)) - loopBound;
+            
+            objGroup.position.x = posObj;
+            
+            // Camera follow (optional, keep static for S frame)
+            camera.position.x = 0;
+            
+        } else {
+            // Observer is S'
+            const vFrame = -state.v; // S moves at -v relative to S'
+            const u = state.uPrime;  // Object moves at u' relative to S'
+            const gammaFrame = calcGamma(state.v); // Gamma is symmetric
+            
+            // Frame S'
+            gridSPrime.position.x = 0;
+            originSPrime.position.x = 0;
+            gridSPrime.scale.x = 1; // Not contracted in its own frame
+            
+            // Frame S
+            let posS = (vFrame * state.time * visualScale);
+            posS = ((posS + loopBound) % (loopBound * 2)) - loopBound;
+            
+            gridS.position.x = posS;
+            originS.position.x = posS;
+            
+            // Length Contraction: S' sees S contracted
+            gridS.scale.x = 1 / gammaFrame;
+            
+            // Object
+            let posObj = (u * state.time * visualScale);
+            posObj = ((posObj + loopBound) % (loopBound * 2)) - loopBound;
+            
+            objGroup.position.x = posObj;
+            
+            // Camera follow S' origin
+            camera.position.x = 0;
+        }
+
+        // Engine glow animation
+        glow.scale.setScalar(1 + 0.2 * Math.sin(now * 0.01));
+
+        renderer.render(scene, camera);
+    }
+
+    // Initialize
+    updatePhysicsState();
+    animate();
+    
+    // Trigger initial resize to setup canvas
+    setTimeout(onWindowResize, 100);
+</script>
+</body>
+</html>
